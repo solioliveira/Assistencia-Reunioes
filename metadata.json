@@ -1,0 +1,8 @@
+{
+  "name": "Registro de Frequência das Reuniões",
+  "description": "Aplicação moderna e responsiva para registro de chamada e assistência das reuniões congregacionais, com dashboard visual de gráficos da assistência média por tipo de reunião nos últimos 30 dias, suporte a presencial, Zoom, relatórios e pastoreio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

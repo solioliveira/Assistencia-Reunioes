@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "Publisher": {
+      "title": "Publicador",
+      "description": "Dados do publicador da congregação",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "group": { "type": "integer" },
+        "roles": { "type": "array" },
+        "phone": { "type": "string" },
+        "active": { "type": "boolean" },
+        "notes": { "type": "string", "maxLength": 300 }
+      },
+      "required": ["id", "name", "group", "roles"]
+    },
+    "Meeting": {
+      "title": "Reunião",
+      "description": "Dados de uma reunião congregacional",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["midweek", "weekend"] },
+        "date": { "type": "string" },
+        "dayOfWeek": { "type": "string" },
+        "titleOrTheme": { "type": "string", "maxLength": 200 },
+        "speakerOrLeader": { "type": "string", "maxLength": 100 },
+        "observations": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "type", "date"]
+    },
+    "AttendanceRecord": {
+      "title": "Registro de Chamada",
+      "description": "Status de presença de um publicador em uma reunião",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "meetingId": { "type": "string" },
+        "publisherId": { "type": "string" },
+        "status": { "type": "string", "enum": ["presencial", "zoom", "ausente"] },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "meetingId", "publisherId", "status"]
+    },
+    "ShepherdingVisit": {
+      "title": "Visita de Pastoreio",
+      "description": "Registro confidencial de pastoreio realizado por anciãos",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "publisherId": { "type": "string" },
+        "date": { "type": "string" },
+        "eldersInvolved": { "type": "string", "maxLength": 150 },
+        "purpose": { "type": "string", "maxLength": 250 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["planejada", "realizada"] }
+      },
+      "required": ["id", "publisherId", "date", "eldersInvolved"]
+    }
+  },
+  "firestore": {
+    "/publishers/{publisherId}": {
+      "schema": "Publisher",
+      "description": "Coleção de publicadores da congregação"
+    },
+    "/meetings/{meetingId}": {
+      "schema": "Meeting",
+      "description": "Coleção de reuniões agendadas ou realizadas"
+    },
+    "/meetings/{meetingId}/attendance/{recordId}": {
+      "schema": "AttendanceRecord",
+      "description": "Registros de chamada específicos para cada reunião"
+    },
+    "/shepherdingVisits/{visitId}": {
+      "schema": "ShepherdingVisit",
+      "description": "Registros de visitas de pastoreio"
+    }
+  }
+}

@@ -1,0 +1,1787 @@
+{
+  "version": 2,
+  "congregationName": "Congregação das Testemunhas de Jeová",
+  "publishers": [
+    {
+      "id": "pub-g1-01",
+      "name": "Geovane Maioto",
+      "group": 1,
+      "roles": [
+        "Ancião",
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "notes": "Superintendente do Grupo 1",
+      "familyName": "Família Maioto"
+    },
+    {
+      "id": "pub-g1-02",
+      "name": "Vagner Carvalho",
+      "group": 1,
+      "roles": [
+        "Servo Ministerial",
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "notes": "Ajudante do Grupo 1",
+      "familyName": "Família Carvalho"
+    },
+    {
+      "id": "pub-g1-03",
+      "name": "Alessandra Maioto",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Maioto"
+    },
+    {
+      "id": "pub-g1-04",
+      "name": "Anita Carvalho",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Carvalho"
+    },
+    {
+      "id": "pub-g1-05",
+      "name": "Adriano Meira",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Meira"
+    },
+    {
+      "id": "pub-g1-06",
+      "name": "Dirceu Silva",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Silva"
+    },
+    {
+      "id": "pub-g1-07",
+      "name": "Flavia Meira",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Meira"
+    },
+    {
+      "id": "pub-g1-08",
+      "name": "Joceli Rosa",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Rosa"
+    },
+    {
+      "id": "pub-g1-09",
+      "name": "Juveniane Andrade",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g1-10",
+      "name": "Leonardo Carvalho",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Carvalho"
+    },
+    {
+      "id": "pub-g1-11",
+      "name": "Luciane Carvalho",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Carvalho"
+    },
+    {
+      "id": "pub-g1-12",
+      "name": "Maria de Fátima",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g1-13",
+      "name": "Maria Lourdes Silva",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Silva"
+    },
+    {
+      "id": "pub-g1-14",
+      "name": "Nirleide Silva",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Silva"
+    },
+    {
+      "id": "pub-g1-15",
+      "name": "Noêmia Silva",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Silva"
+    },
+    {
+      "id": "pub-g1-16",
+      "name": "Vânia Romero",
+      "group": 1,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g2-01",
+      "name": "Zilney Silva",
+      "group": 2,
+      "roles": [
+        "Ancião",
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "notes": "Superintendente do Grupo 2",
+      "familyName": "Família Silva"
+    },
+    {
+      "id": "pub-g2-02",
+      "name": "Alex Antoniassi",
+      "group": 2,
+      "roles": [
+        "Servo Ministerial",
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "notes": "Ajudante do Grupo 2"
+    },
+    {
+      "id": "pub-g2-03",
+      "name": "Claudenice Chalega",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g2-04",
+      "name": "Donizeti Martins",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Martins"
+    },
+    {
+      "id": "pub-g2-05",
+      "name": "Ilde Carla",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g2-06",
+      "name": "Liliane C. Silva",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Silva"
+    },
+    {
+      "id": "pub-g2-07",
+      "name": "Lucia Meira",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Meira"
+    },
+    {
+      "id": "pub-g2-08",
+      "name": "Maria da Graça",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g2-09",
+      "name": "Marlene Martins",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Martins"
+    },
+    {
+      "id": "pub-g2-10",
+      "name": "Nadir Lima",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g2-11",
+      "name": "Raimunda G. Freitas",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g2-12",
+      "name": "Robson Marinho",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g2-13",
+      "name": "Samuel Sousa",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Sousa"
+    },
+    {
+      "id": "pub-g2-14",
+      "name": "Sandra Silva",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Silva"
+    },
+    {
+      "id": "pub-g2-15",
+      "name": "Yasmin Sousa",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "familyName": "Família Sousa"
+    },
+    {
+      "id": "pub-g2-16",
+      "name": "Marinete Souza",
+      "group": 2,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-01",
+      "name": "Deivison Sangregorio",
+      "group": 3,
+      "roles": [
+        "Ancião",
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "notes": "Superintendente do Grupo 3",
+      "familyName": "Família Sangregorio"
+    },
+    {
+      "id": "pub-g3-02",
+      "name": "Adriano Ferreira",
+      "group": 3,
+      "roles": [
+        "Servo Ministerial",
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "notes": "Ajudante do Grupo 3",
+      "familyName": "Família Ferreira"
+    },
+    {
+      "id": "pub-g3-03",
+      "name": "Domenica Anjos",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-04",
+      "name": "Ingrid F. Neres",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-05",
+      "name": "Jessica Silva",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-06",
+      "name": "Leda Balabem",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-07",
+      "name": "Lethycia Anjos",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-08",
+      "name": "Lucimeire Vieira",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-09",
+      "name": "Marli Stanisci",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-10",
+      "name": "Robson Neres",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-11",
+      "name": "Sara Sangregorio",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-12",
+      "name": "Thais Martins",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-13",
+      "name": "Vanessa Costa",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-14",
+      "name": "Washington Luis M.",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-15",
+      "name": "José Nildo",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-16",
+      "name": "Marcelo Veloso",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-17",
+      "name": "Simeia Belmiro",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-18",
+      "name": "Conceição Belmiro",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g3-19",
+      "name": "Maria A. Belmiro",
+      "group": 3,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-01",
+      "name": "Gilvanildo Miranda",
+      "group": 4,
+      "roles": [
+        "Ancião",
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "notes": "Superintendente do Grupo 4 (Antigo 5)",
+      "familyName": "Família Miranda"
+    },
+    {
+      "id": "pub-g4-02",
+      "name": "Solimar Oliveira",
+      "group": 4,
+      "roles": [
+        "Servo Ministerial",
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "notes": "Ajudante do Grupo 4 (Antigo 5)",
+      "familyName": "Família Oliveira"
+    },
+    {
+      "id": "pub-g4-03",
+      "name": "Arlete Miranda",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-04",
+      "name": "Bernardo Vieira",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-05",
+      "name": "David Vieira",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-06",
+      "name": "Ednor",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-07",
+      "name": "Gely Dias",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-08",
+      "name": "Hellen Vieira",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-09",
+      "name": "Julia Vieira",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-10",
+      "name": "Liliane Freire",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-11",
+      "name": "Luzia Moraes",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-12",
+      "name": "Marinalva Cavalcante",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-13",
+      "name": "Paulo Freire",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-14",
+      "name": "Rodrigo Dias",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-15",
+      "name": "Rodrigo Miranda",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-16",
+      "name": "Stelle Oliveira",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-17",
+      "name": "Matheus Oliveira",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g4-18",
+      "name": "Renata Lopes",
+      "group": 4,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-01",
+      "name": "Juraci Rosa",
+      "group": 5,
+      "roles": [
+        "Ancião",
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "notes": "Superintendente do Grupo 5 (Antigo 6)",
+      "familyName": "Família Rosa"
+    },
+    {
+      "id": "pub-g5-02",
+      "name": "Luiz Henrique V.",
+      "group": 5,
+      "roles": [
+        "Servo Ministerial",
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "notes": "Ajudante do Grupo 5 (Antigo 6)"
+    },
+    {
+      "id": "pub-g5-03",
+      "name": "Ana Beatriz",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-04",
+      "name": "Arthur Duarte",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-05",
+      "name": "Carlos R. Junior",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-06",
+      "name": "Edneide Maria",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-07",
+      "name": "Fabiana Mendes",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-08",
+      "name": "Gabriel Pimenta",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-09",
+      "name": "Irandi Lima",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-10",
+      "name": "Juan Duarte",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-11",
+      "name": "Pâmela Peres",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-12",
+      "name": "Roberia Rosa",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-13",
+      "name": "Rute Duarte",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-14",
+      "name": "Thamires Almeida",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-15",
+      "name": "Diego Tiburcio",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-16",
+      "name": "Camila Tiburcio",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-17",
+      "name": "Karina Tiburcio",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g5-18",
+      "name": "Gustavo Tiburcio",
+      "group": 5,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-01",
+      "name": "Roberto Dornella (Tati)",
+      "group": 6,
+      "roles": [
+        "Ancião",
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "notes": "Superintendente do Grupo 6 (Antigo 7)",
+      "familyName": "Família Dornella"
+    },
+    {
+      "id": "pub-g6-02",
+      "name": "Alvanir Almeida",
+      "group": 6,
+      "roles": [
+        "Servo Ministerial",
+        "Publicador Batizado"
+      ],
+      "active": true,
+      "notes": "Ajudante do Grupo 6 (Antigo 7)",
+      "familyName": "Família Almeida"
+    },
+    {
+      "id": "pub-g6-03",
+      "name": "Benedito Joaquim",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-04",
+      "name": "Cássia Dornella",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-05",
+      "name": "Felipe Santana",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-06",
+      "name": "João Santana",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-07",
+      "name": "Maria Madalena",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-08",
+      "name": "Maria Piedade",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-09",
+      "name": "Maria Safira",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-10",
+      "name": "Miguel Almeida",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-11",
+      "name": "Rosana Santana",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-12",
+      "name": "Viviane Oliveira",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-13",
+      "name": "Simone Martim",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-14",
+      "name": "Nilza Oliveira",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-15",
+      "name": "Marcos de Lima",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-16",
+      "name": "Joyce de Lima",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-17",
+      "name": "Dario Silverio",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-18",
+      "name": "Julia Silverio",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-19",
+      "name": "Maria Maroli",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    },
+    {
+      "id": "pub-g6-20",
+      "name": "Darilene Sampaio",
+      "group": 6,
+      "roles": [
+        "Publicador Batizado"
+      ],
+      "active": true
+    }
+  ],
+  "meetings": [
+    {
+      "id": "meet-sabado-12",
+      "type": "weekend",
+      "date": "2026-09-12",
+      "dayOfWeek": "Sábado",
+      "titleOrTheme": "Discurso Público e Estudo de A Sentinela",
+      "observations": "Reunião de fim de semana (Sábado). Chamada realizada.",
+      "createdAt": "2026-09-12T18:00:00.000Z"
+    },
+    {
+      "id": "meet-terca-08",
+      "type": "midweek",
+      "date": "2026-09-08",
+      "dayOfWeek": "Terça-feira",
+      "titleOrTheme": "Nossa Vida e Ministério Cristão: Faça o Seu Melhor no Ministério",
+      "observations": "Reunião de meio de semana (Terça-feira passada) realizada.",
+      "createdAt": "2026-09-08T19:30:00.000Z"
+    },
+    {
+      "id": "meet-sabado-05",
+      "type": "weekend",
+      "date": "2026-09-05",
+      "dayOfWeek": "Sábado",
+      "titleOrTheme": "Discurso Público e Estudo de A Sentinela",
+      "observations": "Reunião de fim de semana (Sábado passado) realizada com excelente assistência.",
+      "createdAt": "2026-09-05T18:00:00.000Z"
+    },
+    {
+      "id": "meet-terca-01",
+      "type": "midweek",
+      "date": "2026-09-01",
+      "dayOfWeek": "Terça-feira",
+      "titleOrTheme": "Nossa Vida e Ministério Cristão",
+      "observations": "Reunião de meio de semana (Terça-feira).",
+      "createdAt": "2026-09-01T19:30:00.000Z"
+    },
+    {
+      "id": "meet-01",
+      "type": "midweek",
+      "date": "2026-09-02",
+      "dayOfWeek": "Quarta-feira",
+      "titleOrTheme": "Nossa Vida e Ministério Cristão",
+      "observations": "Reunião de Meio de Semana realizada com boa participação presencial e Zoom.",
+      "createdAt": "2026-09-02T19:30:00.000Z"
+    },
+    {
+      "id": "meet-02",
+      "type": "weekend",
+      "date": "2026-09-06",
+      "dayOfWeek": "Domingo",
+      "titleOrTheme": "Discurso Público e Estudo de A Sentinela",
+      "observations": "Excelente assistência de fim de semana.",
+      "createdAt": "2026-09-06T18:00:00.000Z"
+    },
+    {
+      "id": "meet-03",
+      "type": "midweek",
+      "date": "2026-09-09",
+      "dayOfWeek": "Quarta-feira",
+      "titleOrTheme": "Nossa Vida e Ministério Cristão: Faça o Seu Melhor no Ministério",
+      "observations": "Reunião desta semana. Chamada em andamento.",
+      "createdAt": "2026-09-09T19:30:00.000Z"
+    }
+  ],
+  "attendance": {
+    "meet-01": {
+      "pub-g1-01": "presencial",
+      "pub-g1-02": "presencial",
+      "pub-g1-03": "presencial",
+      "pub-g1-04": "presencial",
+      "pub-g1-05": "presencial",
+      "pub-g1-06": "presencial",
+      "pub-g1-07": "presencial",
+      "pub-g1-08": "zoom",
+      "pub-g1-09": "presencial",
+      "pub-g1-10": "presencial",
+      "pub-g1-11": "presencial",
+      "pub-g1-12": "presencial",
+      "pub-g1-13": "presencial",
+      "pub-g1-14": "presencial",
+      "pub-g1-15": "presencial",
+      "pub-g1-16": "zoom",
+      "pub-g2-01": "presencial",
+      "pub-g2-02": "presencial",
+      "pub-g2-03": "presencial",
+      "pub-g2-04": "presencial",
+      "pub-g2-05": "zoom",
+      "pub-g2-06": "presencial",
+      "pub-g2-07": "presencial",
+      "pub-g2-08": "presencial",
+      "pub-g2-09": "presencial",
+      "pub-g2-10": "presencial",
+      "pub-g2-11": "presencial",
+      "pub-g2-12": "presencial",
+      "pub-g2-13": "presencial",
+      "pub-g2-14": "presencial",
+      "pub-g2-15": "zoom",
+      "pub-g2-16": "presencial",
+      "pub-g3-01": "presencial",
+      "pub-g3-02": "presencial",
+      "pub-g3-03": "presencial",
+      "pub-g3-04": "presencial",
+      "pub-g3-05": "presencial",
+      "pub-g3-06": "presencial",
+      "pub-g3-07": "presencial",
+      "pub-g3-08": "presencial",
+      "pub-g3-09": "presencial",
+      "pub-g3-10": "presencial",
+      "pub-g3-11": "presencial",
+      "pub-g3-12": "presencial",
+      "pub-g3-13": "presencial",
+      "pub-g3-14": "presencial",
+      "pub-g3-15": "presencial",
+      "pub-g3-16": "presencial",
+      "pub-g3-17": "presencial",
+      "pub-g3-18": "presencial",
+      "pub-g3-19": "presencial",
+      "pub-g4-01": "presencial",
+      "pub-g4-02": "presencial",
+      "pub-g4-03": "presencial",
+      "pub-g4-04": "presencial",
+      "pub-g4-05": "presencial",
+      "pub-g4-06": "presencial",
+      "pub-g4-07": "presencial",
+      "pub-g4-08": "zoom",
+      "pub-g4-09": "presencial",
+      "pub-g4-10": "presencial",
+      "pub-g4-11": "presencial",
+      "pub-g4-12": "presencial",
+      "pub-g4-13": "presencial",
+      "pub-g4-14": "presencial",
+      "pub-g4-15": "presencial",
+      "pub-g4-16": "presencial",
+      "pub-g4-17": "presencial",
+      "pub-g4-18": "presencial",
+      "pub-g5-01": "presencial",
+      "pub-g5-02": "presencial",
+      "pub-g5-03": "presencial",
+      "pub-g5-04": "presencial",
+      "pub-g5-05": "presencial",
+      "pub-g5-06": "presencial",
+      "pub-g5-07": "presencial",
+      "pub-g5-08": "presencial",
+      "pub-g5-09": "presencial",
+      "pub-g5-10": "presencial",
+      "pub-g5-11": "presencial",
+      "pub-g5-12": "presencial",
+      "pub-g5-13": "presencial",
+      "pub-g5-14": "presencial",
+      "pub-g5-15": "presencial",
+      "pub-g5-16": "presencial",
+      "pub-g5-17": "presencial",
+      "pub-g5-18": "presencial",
+      "pub-g6-01": "presencial",
+      "pub-g6-02": "presencial",
+      "pub-g6-03": "presencial",
+      "pub-g6-04": "presencial",
+      "pub-g6-05": "presencial",
+      "pub-g6-06": "presencial",
+      "pub-g6-07": "presencial",
+      "pub-g6-08": "presencial",
+      "pub-g6-09": "presencial",
+      "pub-g6-10": "presencial",
+      "pub-g6-11": "presencial",
+      "pub-g6-12": "presencial",
+      "pub-g6-13": "presencial",
+      "pub-g6-14": "presencial",
+      "pub-g6-15": "presencial",
+      "pub-g6-16": "presencial",
+      "pub-g6-17": "presencial",
+      "pub-g6-18": "presencial",
+      "pub-g6-19": "presencial",
+      "pub-g6-20": "presencial"
+    },
+    "meet-02": {
+      "pub-g1-01": "presencial",
+      "pub-g1-02": "presencial",
+      "pub-g1-03": "presencial",
+      "pub-g1-04": "presencial",
+      "pub-g1-05": "presencial",
+      "pub-g1-06": "presencial",
+      "pub-g1-07": "presencial",
+      "pub-g1-08": "presencial",
+      "pub-g1-09": "presencial",
+      "pub-g1-10": "presencial",
+      "pub-g1-11": "presencial",
+      "pub-g1-12": "presencial",
+      "pub-g1-13": "presencial",
+      "pub-g1-14": "presencial",
+      "pub-g1-15": "presencial",
+      "pub-g1-16": "presencial",
+      "pub-g2-01": "presencial",
+      "pub-g2-02": "presencial",
+      "pub-g2-03": "presencial",
+      "pub-g2-04": "presencial",
+      "pub-g2-05": "presencial",
+      "pub-g2-06": "presencial",
+      "pub-g2-07": "presencial",
+      "pub-g2-08": "presencial",
+      "pub-g2-09": "presencial",
+      "pub-g2-10": "presencial",
+      "pub-g2-11": "presencial",
+      "pub-g2-12": "presencial",
+      "pub-g2-13": "presencial",
+      "pub-g2-14": "presencial",
+      "pub-g2-15": "presencial",
+      "pub-g2-16": "presencial",
+      "pub-g3-01": "presencial",
+      "pub-g3-02": "presencial",
+      "pub-g3-03": "presencial",
+      "pub-g3-04": "presencial",
+      "pub-g3-05": "presencial",
+      "pub-g3-06": "presencial",
+      "pub-g3-07": "presencial",
+      "pub-g3-08": "presencial",
+      "pub-g3-09": "presencial",
+      "pub-g3-10": "presencial",
+      "pub-g3-11": "presencial",
+      "pub-g3-12": "presencial",
+      "pub-g3-13": "presencial",
+      "pub-g3-14": "presencial",
+      "pub-g3-15": "presencial",
+      "pub-g3-16": "presencial",
+      "pub-g3-17": "presencial",
+      "pub-g3-18": "presencial",
+      "pub-g3-19": "presencial",
+      "pub-g4-01": "presencial",
+      "pub-g4-02": "presencial",
+      "pub-g4-03": "presencial",
+      "pub-g4-04": "presencial",
+      "pub-g4-05": "presencial",
+      "pub-g4-06": "presencial",
+      "pub-g4-07": "presencial",
+      "pub-g4-08": "presencial",
+      "pub-g4-09": "presencial",
+      "pub-g4-10": "presencial",
+      "pub-g4-11": "presencial",
+      "pub-g4-12": "presencial",
+      "pub-g4-13": "presencial",
+      "pub-g4-14": "presencial",
+      "pub-g4-15": "presencial",
+      "pub-g4-16": "presencial",
+      "pub-g4-17": "presencial",
+      "pub-g4-18": "presencial",
+      "pub-g5-01": "presencial",
+      "pub-g5-02": "presencial",
+      "pub-g5-03": "presencial",
+      "pub-g5-04": "presencial",
+      "pub-g5-05": "presencial",
+      "pub-g5-06": "presencial",
+      "pub-g5-07": "presencial",
+      "pub-g5-08": "presencial",
+      "pub-g5-09": "presencial",
+      "pub-g5-10": "presencial",
+      "pub-g5-11": "presencial",
+      "pub-g5-12": "presencial",
+      "pub-g5-13": "presencial",
+      "pub-g5-14": "presencial",
+      "pub-g5-15": "presencial",
+      "pub-g5-16": "presencial",
+      "pub-g5-17": "presencial",
+      "pub-g5-18": "presencial",
+      "pub-g6-01": "presencial",
+      "pub-g6-02": "presencial",
+      "pub-g6-03": "presencial",
+      "pub-g6-04": "presencial",
+      "pub-g6-05": "presencial",
+      "pub-g6-06": "presencial",
+      "pub-g6-07": "presencial",
+      "pub-g6-08": "presencial",
+      "pub-g6-09": "presencial",
+      "pub-g6-10": "presencial",
+      "pub-g6-11": "presencial",
+      "pub-g6-12": "presencial",
+      "pub-g6-13": "presencial",
+      "pub-g6-14": "presencial",
+      "pub-g6-15": "presencial",
+      "pub-g6-16": "presencial",
+      "pub-g6-17": "presencial",
+      "pub-g6-18": "presencial",
+      "pub-g6-19": "presencial",
+      "pub-g6-20": "presencial"
+    },
+    "meet-03": {
+      "pub-g1-01": "presencial",
+      "pub-g1-02": "presencial",
+      "pub-g1-03": "presencial",
+      "pub-g1-04": "presencial",
+      "pub-g1-05": "presencial",
+      "pub-g1-06": "presencial",
+      "pub-g1-07": "presencial",
+      "pub-g1-08": "zoom",
+      "pub-g1-09": "presencial",
+      "pub-g1-10": "presencial",
+      "pub-g1-11": "presencial",
+      "pub-g1-12": "presencial",
+      "pub-g1-13": "presencial",
+      "pub-g1-14": "presencial",
+      "pub-g1-15": "presencial",
+      "pub-g1-16": "zoom",
+      "pub-g2-01": "presencial",
+      "pub-g2-02": "presencial",
+      "pub-g2-03": "presencial",
+      "pub-g2-04": "presencial",
+      "pub-g2-05": "zoom",
+      "pub-g2-06": "presencial",
+      "pub-g2-07": "presencial",
+      "pub-g2-08": "presencial",
+      "pub-g2-09": "presencial",
+      "pub-g2-10": "presencial",
+      "pub-g2-11": "presencial",
+      "pub-g2-12": "presencial",
+      "pub-g2-13": "presencial",
+      "pub-g2-14": "presencial",
+      "pub-g2-15": "zoom",
+      "pub-g2-16": "presencial",
+      "pub-g3-01": "presencial",
+      "pub-g3-02": "presencial",
+      "pub-g3-03": "presencial",
+      "pub-g3-04": "presencial",
+      "pub-g3-05": "presencial",
+      "pub-g3-06": "presencial",
+      "pub-g3-07": "presencial",
+      "pub-g3-08": "presencial",
+      "pub-g3-09": "presencial",
+      "pub-g3-10": "presencial",
+      "pub-g3-11": "presencial",
+      "pub-g3-12": "presencial",
+      "pub-g3-13": "presencial",
+      "pub-g3-14": "presencial",
+      "pub-g3-15": "presencial",
+      "pub-g3-16": "presencial",
+      "pub-g3-17": "presencial",
+      "pub-g3-18": "presencial",
+      "pub-g3-19": "presencial",
+      "pub-g4-01": "presencial",
+      "pub-g4-02": "presencial",
+      "pub-g4-03": "presencial",
+      "pub-g4-04": "presencial",
+      "pub-g4-05": "presencial",
+      "pub-g4-06": "presencial",
+      "pub-g4-07": "presencial",
+      "pub-g4-08": "zoom",
+      "pub-g4-09": "presencial",
+      "pub-g4-10": "presencial",
+      "pub-g4-11": "presencial",
+      "pub-g4-12": "presencial",
+      "pub-g4-13": "presencial",
+      "pub-g4-14": "presencial",
+      "pub-g4-15": "presencial",
+      "pub-g4-16": "presencial",
+      "pub-g4-17": "presencial",
+      "pub-g4-18": "presencial",
+      "pub-g5-01": "presencial",
+      "pub-g5-02": "presencial",
+      "pub-g5-03": "presencial",
+      "pub-g5-04": "presencial",
+      "pub-g5-05": "presencial",
+      "pub-g5-06": "presencial",
+      "pub-g5-07": "presencial",
+      "pub-g5-08": "presencial",
+      "pub-g5-09": "presencial",
+      "pub-g5-10": "presencial",
+      "pub-g5-11": "presencial",
+      "pub-g5-12": "presencial",
+      "pub-g5-13": "presencial",
+      "pub-g5-14": "presencial",
+      "pub-g5-15": "presencial",
+      "pub-g5-16": "presencial",
+      "pub-g5-17": "presencial",
+      "pub-g5-18": "presencial",
+      "pub-g6-01": "presencial",
+      "pub-g6-02": "presencial",
+      "pub-g6-03": "presencial",
+      "pub-g6-04": "presencial",
+      "pub-g6-05": "presencial",
+      "pub-g6-06": "presencial",
+      "pub-g6-07": "presencial",
+      "pub-g6-08": "presencial",
+      "pub-g6-09": "presencial",
+      "pub-g6-10": "presencial",
+      "pub-g6-11": "presencial",
+      "pub-g6-12": "presencial",
+      "pub-g6-13": "presencial",
+      "pub-g6-14": "presencial",
+      "pub-g6-15": "presencial",
+      "pub-g6-16": "presencial",
+      "pub-g6-17": "presencial",
+      "pub-g6-18": "presencial",
+      "pub-g6-19": "presencial",
+      "pub-g6-20": "presencial"
+    },
+    "meet-terca-08": {
+      "pub-g1-01": "presencial",
+      "pub-g1-02": "presencial",
+      "pub-g1-03": "presencial",
+      "pub-g1-04": "presencial",
+      "pub-g1-05": "presencial",
+      "pub-g1-06": "presencial",
+      "pub-g1-07": "presencial",
+      "pub-g1-08": "zoom",
+      "pub-g1-09": "presencial",
+      "pub-g1-10": "presencial",
+      "pub-g1-11": "presencial",
+      "pub-g1-12": "presencial",
+      "pub-g1-13": "presencial",
+      "pub-g1-14": "presencial",
+      "pub-g1-15": "presencial",
+      "pub-g1-16": "zoom",
+      "pub-g2-01": "presencial",
+      "pub-g2-02": "presencial",
+      "pub-g2-03": "presencial",
+      "pub-g2-04": "presencial",
+      "pub-g2-05": "zoom",
+      "pub-g2-06": "presencial",
+      "pub-g2-07": "presencial",
+      "pub-g2-08": "presencial",
+      "pub-g2-09": "presencial",
+      "pub-g2-10": "presencial",
+      "pub-g2-11": "presencial",
+      "pub-g2-12": "presencial",
+      "pub-g2-13": "presencial",
+      "pub-g2-14": "presencial",
+      "pub-g2-15": "zoom",
+      "pub-g2-16": "presencial",
+      "pub-g3-01": "presencial",
+      "pub-g3-02": "presencial",
+      "pub-g3-03": "presencial",
+      "pub-g3-04": "presencial",
+      "pub-g3-05": "presencial",
+      "pub-g3-06": "presencial",
+      "pub-g3-07": "presencial",
+      "pub-g3-08": "presencial",
+      "pub-g3-09": "presencial",
+      "pub-g3-10": "presencial",
+      "pub-g3-11": "presencial",
+      "pub-g3-12": "presencial",
+      "pub-g3-13": "presencial",
+      "pub-g3-14": "presencial",
+      "pub-g3-15": "presencial",
+      "pub-g3-16": "presencial",
+      "pub-g3-17": "presencial",
+      "pub-g3-18": "presencial",
+      "pub-g3-19": "presencial",
+      "pub-g4-01": "presencial",
+      "pub-g4-02": "presencial",
+      "pub-g4-03": "presencial",
+      "pub-g4-04": "presencial",
+      "pub-g4-05": "presencial",
+      "pub-g4-06": "presencial",
+      "pub-g4-07": "presencial",
+      "pub-g4-08": "zoom",
+      "pub-g4-09": "presencial",
+      "pub-g4-10": "presencial",
+      "pub-g4-11": "presencial",
+      "pub-g4-12": "presencial",
+      "pub-g4-13": "presencial",
+      "pub-g4-14": "presencial",
+      "pub-g4-15": "presencial",
+      "pub-g4-16": "presencial",
+      "pub-g4-17": "presencial",
+      "pub-g4-18": "presencial",
+      "pub-g5-01": "presencial",
+      "pub-g5-02": "presencial",
+      "pub-g5-03": "presencial",
+      "pub-g5-04": "presencial",
+      "pub-g5-05": "presencial",
+      "pub-g5-06": "presencial",
+      "pub-g5-07": "presencial",
+      "pub-g5-08": "presencial",
+      "pub-g5-09": "presencial",
+      "pub-g5-10": "presencial",
+      "pub-g5-11": "presencial",
+      "pub-g5-12": "presencial",
+      "pub-g5-13": "presencial",
+      "pub-g5-14": "presencial",
+      "pub-g5-15": "presencial",
+      "pub-g5-16": "presencial",
+      "pub-g5-17": "presencial",
+      "pub-g5-18": "presencial",
+      "pub-g6-01": "presencial",
+      "pub-g6-02": "presencial",
+      "pub-g6-03": "presencial",
+      "pub-g6-04": "presencial",
+      "pub-g6-05": "presencial",
+      "pub-g6-06": "presencial",
+      "pub-g6-07": "presencial",
+      "pub-g6-08": "presencial",
+      "pub-g6-09": "presencial",
+      "pub-g6-10": "presencial",
+      "pub-g6-11": "presencial",
+      "pub-g6-12": "presencial",
+      "pub-g6-13": "presencial",
+      "pub-g6-14": "presencial",
+      "pub-g6-15": "presencial",
+      "pub-g6-16": "presencial",
+      "pub-g6-17": "presencial",
+      "pub-g6-18": "presencial",
+      "pub-g6-19": "presencial",
+      "pub-g6-20": "presencial"
+    },
+    "meet-sabado-05": {
+      "pub-g1-01": "presencial",
+      "pub-g1-02": "presencial",
+      "pub-g1-03": "presencial",
+      "pub-g1-04": "presencial",
+      "pub-g1-05": "presencial",
+      "pub-g1-06": "presencial",
+      "pub-g1-07": "presencial",
+      "pub-g1-08": "presencial",
+      "pub-g1-09": "presencial",
+      "pub-g1-10": "presencial",
+      "pub-g1-11": "presencial",
+      "pub-g1-12": "presencial",
+      "pub-g1-13": "presencial",
+      "pub-g1-14": "presencial",
+      "pub-g1-15": "presencial",
+      "pub-g1-16": "presencial",
+      "pub-g2-01": "presencial",
+      "pub-g2-02": "presencial",
+      "pub-g2-03": "presencial",
+      "pub-g2-04": "presencial",
+      "pub-g2-05": "presencial",
+      "pub-g2-06": "presencial",
+      "pub-g2-07": "presencial",
+      "pub-g2-08": "presencial",
+      "pub-g2-09": "presencial",
+      "pub-g2-10": "presencial",
+      "pub-g2-11": "presencial",
+      "pub-g2-12": "presencial",
+      "pub-g2-13": "presencial",
+      "pub-g2-14": "presencial",
+      "pub-g2-15": "presencial",
+      "pub-g2-16": "presencial",
+      "pub-g3-01": "presencial",
+      "pub-g3-02": "presencial",
+      "pub-g3-03": "presencial",
+      "pub-g3-04": "presencial",
+      "pub-g3-05": "presencial",
+      "pub-g3-06": "presencial",
+      "pub-g3-07": "presencial",
+      "pub-g3-08": "presencial",
+      "pub-g3-09": "presencial",
+      "pub-g3-10": "presencial",
+      "pub-g3-11": "presencial",
+      "pub-g3-12": "presencial",
+      "pub-g3-13": "presencial",
+      "pub-g3-14": "presencial",
+      "pub-g3-15": "presencial",
+      "pub-g3-16": "presencial",
+      "pub-g3-17": "presencial",
+      "pub-g3-18": "presencial",
+      "pub-g3-19": "presencial",
+      "pub-g4-01": "presencial",
+      "pub-g4-02": "presencial",
+      "pub-g4-03": "presencial",
+      "pub-g4-04": "presencial",
+      "pub-g4-05": "presencial",
+      "pub-g4-06": "presencial",
+      "pub-g4-07": "presencial",
+      "pub-g4-08": "presencial",
+      "pub-g4-09": "presencial",
+      "pub-g4-10": "presencial",
+      "pub-g4-11": "presencial",
+      "pub-g4-12": "presencial",
+      "pub-g4-13": "presencial",
+      "pub-g4-14": "presencial",
+      "pub-g4-15": "presencial",
+      "pub-g4-16": "presencial",
+      "pub-g4-17": "presencial",
+      "pub-g4-18": "presencial",
+      "pub-g5-01": "presencial",
+      "pub-g5-02": "presencial",
+      "pub-g5-03": "presencial",
+      "pub-g5-04": "presencial",
+      "pub-g5-05": "presencial",
+      "pub-g5-06": "presencial",
+      "pub-g5-07": "presencial",
+      "pub-g5-08": "presencial",
+      "pub-g5-09": "presencial",
+      "pub-g5-10": "presencial",
+      "pub-g5-11": "presencial",
+      "pub-g5-12": "presencial",
+      "pub-g5-13": "presencial",
+      "pub-g5-14": "presencial",
+      "pub-g5-15": "presencial",
+      "pub-g5-16": "presencial",
+      "pub-g5-17": "presencial",
+      "pub-g5-18": "presencial",
+      "pub-g6-01": "presencial",
+      "pub-g6-02": "presencial",
+      "pub-g6-03": "presencial",
+      "pub-g6-04": "presencial",
+      "pub-g6-05": "presencial",
+      "pub-g6-06": "presencial",
+      "pub-g6-07": "presencial",
+      "pub-g6-08": "presencial",
+      "pub-g6-09": "presencial",
+      "pub-g6-10": "presencial",
+      "pub-g6-11": "presencial",
+      "pub-g6-12": "presencial",
+      "pub-g6-13": "presencial",
+      "pub-g6-14": "presencial",
+      "pub-g6-15": "presencial",
+      "pub-g6-16": "presencial",
+      "pub-g6-17": "presencial",
+      "pub-g6-18": "presencial",
+      "pub-g6-19": "presencial",
+      "pub-g6-20": "presencial"
+    },
+    "meet-sabado-12": {
+      "pub-g1-01": "presencial",
+      "pub-g1-02": "presencial",
+      "pub-g1-03": "presencial",
+      "pub-g1-04": "presencial",
+      "pub-g1-05": "presencial",
+      "pub-g1-06": "presencial",
+      "pub-g1-07": "presencial",
+      "pub-g1-08": "presencial",
+      "pub-g1-09": "presencial",
+      "pub-g1-10": "presencial",
+      "pub-g1-11": "presencial",
+      "pub-g1-12": "presencial",
+      "pub-g1-13": "presencial",
+      "pub-g1-14": "presencial",
+      "pub-g1-15": "presencial",
+      "pub-g1-16": "presencial",
+      "pub-g2-01": "presencial",
+      "pub-g2-02": "presencial",
+      "pub-g2-03": "presencial",
+      "pub-g2-04": "presencial",
+      "pub-g2-05": "presencial",
+      "pub-g2-06": "presencial",
+      "pub-g2-07": "presencial",
+      "pub-g2-08": "presencial",
+      "pub-g2-09": "presencial",
+      "pub-g2-10": "presencial",
+      "pub-g2-11": "presencial",
+      "pub-g2-12": "presencial",
+      "pub-g2-13": "presencial",
+      "pub-g2-14": "presencial",
+      "pub-g2-15": "presencial",
+      "pub-g2-16": "presencial",
+      "pub-g3-01": "presencial",
+      "pub-g3-02": "presencial",
+      "pub-g3-03": "presencial",
+      "pub-g3-04": "presencial",
+      "pub-g3-05": "presencial",
+      "pub-g3-06": "presencial",
+      "pub-g3-07": "presencial",
+      "pub-g3-08": "presencial",
+      "pub-g3-09": "presencial",
+      "pub-g3-10": "presencial",
+      "pub-g3-11": "presencial",
+      "pub-g3-12": "presencial",
+      "pub-g3-13": "presencial",
+      "pub-g3-14": "presencial",
+      "pub-g3-15": "presencial",
+      "pub-g3-16": "presencial",
+      "pub-g3-17": "presencial",
+      "pub-g3-18": "presencial",
+      "pub-g3-19": "presencial",
+      "pub-g4-01": "presencial",
+      "pub-g4-02": "presencial",
+      "pub-g4-03": "presencial",
+      "pub-g4-04": "presencial",
+      "pub-g4-05": "presencial",
+      "pub-g4-06": "presencial",
+      "pub-g4-07": "presencial",
+      "pub-g4-08": "presencial",
+      "pub-g4-09": "presencial",
+      "pub-g4-10": "presencial",
+      "pub-g4-11": "presencial",
+      "pub-g4-12": "presencial",
+      "pub-g4-13": "presencial",
+      "pub-g4-14": "presencial",
+      "pub-g4-15": "presencial",
+      "pub-g4-16": "presencial",
+      "pub-g4-17": "presencial",
+      "pub-g4-18": "presencial",
+      "pub-g5-01": "presencial",
+      "pub-g5-02": "presencial",
+      "pub-g5-03": "presencial",
+      "pub-g5-04": "presencial",
+      "pub-g5-05": "presencial",
+      "pub-g5-06": "presencial",
+      "pub-g5-07": "presencial",
+      "pub-g5-08": "presencial",
+      "pub-g5-09": "presencial",
+      "pub-g5-10": "presencial",
+      "pub-g5-11": "presencial",
+      "pub-g5-12": "presencial",
+      "pub-g5-13": "presencial",
+      "pub-g5-14": "presencial",
+      "pub-g5-15": "presencial",
+      "pub-g5-16": "presencial",
+      "pub-g5-17": "presencial",
+      "pub-g5-18": "presencial",
+      "pub-g6-01": "presencial",
+      "pub-g6-02": "presencial",
+      "pub-g6-03": "presencial",
+      "pub-g6-04": "presencial",
+      "pub-g6-05": "presencial",
+      "pub-g6-06": "presencial",
+      "pub-g6-07": "presencial",
+      "pub-g6-08": "presencial",
+      "pub-g6-09": "presencial",
+      "pub-g6-10": "presencial",
+      "pub-g6-11": "presencial",
+      "pub-g6-12": "presencial",
+      "pub-g6-13": "presencial",
+      "pub-g6-14": "presencial",
+      "pub-g6-15": "presencial",
+      "pub-g6-16": "presencial",
+      "pub-g6-17": "presencial",
+      "pub-g6-18": "presencial",
+      "pub-g6-19": "presencial",
+      "pub-g6-20": "presencial"
+    }
+  },
+  "attendanceNotes": {
+    "meet-01": {
+      "pub-g1-08": "Idosa, dificuldade de locomoção",
+      "pub-g1-16": "Turno de plantão no hospital",
+      "pub-g2-05": "Sintomas gripais",
+      "pub-g2-15": "Cuidando de familiar idoso",
+      "pub-g4-08": "Trabalho até mais tarde"
+    },
+    "meet-03": {
+      "pub-g1-08": "Idosa, assistindo pelo Zoom",
+      "pub-g1-16": "Plantão no trabalho",
+      "pub-g2-05": "Recuperando de gripe",
+      "pub-g2-15": "Cuidando de familiar",
+      "pub-g4-08": "Viagem a trabalho"
+    },
+    "meet-terca-08": {
+      "pub-g1-08": "Idosa, assistindo pelo Zoom",
+      "pub-g1-16": "Plantão no trabalho",
+      "pub-g2-05": "Recuperando de gripe",
+      "pub-g2-15": "Cuidando de familiar",
+      "pub-g4-08": "Viagem a trabalho"
+    },
+    "meet-sabado-05": {
+      "pub-g1-08": "Idosa, dificuldade de locomoção",
+      "pub-g1-16": "Turno de plantão no hospital",
+      "pub-g2-05": "Sintomas gripais",
+      "pub-g2-15": "Cuidando de familiar idoso",
+      "pub-g4-08": "Trabalho até mais tarde"
+    }
+  },
+  "shepherdingVisits": [
+    {
+      "id": "visit-01",
+      "publisherId": "pub-g1-08",
+      "date": "2026-09-05",
+      "eldersInvolved": "Geovane Maioto e Vagner Carvalho",
+      "purpose": "Encorajamento espiritual e apoio com o aplicativo Zoom",
+      "notes": "A irmã agradeceu a ajuda técnica e o texto bíblico lido de 1 Tessalonicenses 5:11.",
+      "status": "realizada"
+    }
+  ],
+  "lastUpdated": "2026-09-12T22:12:31.557Z",
+  "exportDate": "2026-09-12T18:01:52.115Z",
+  "sourceDeviceId": "dev-mtywg0i6-m19jr",
+  "sourceDeviceName": "Mac"
+}
