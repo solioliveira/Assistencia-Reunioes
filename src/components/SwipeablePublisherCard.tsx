@@ -421,31 +421,65 @@ export const SwipeablePublisherCard: React.FC<SwipeablePublisherCardProps> = ({
               </button>
             </div>
 
-            {/* Opção rápida de marcar família quando houver mais de 1 membro */}
+            {/* Destaque para Chamada por Família em 1 Toque (Modo Simplificado) */}
             {publisher.familyName && familyMembersCount && familyMembersCount > 1 && onMarkFamily && (
               <div
-                className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]"
+                className="mt-1 p-2 sm:p-2.5 rounded-xl bg-gradient-to-r from-amber-50 via-orange-50/60 to-amber-50 border-2 border-amber-300/90 shadow-2xs space-y-2 select-none"
                 onClick={(e) => e.stopPropagation()}
               >
-                <span className="text-slate-600 font-semibold truncate">
-                  👨‍👩‍👧‍👦 {publisher.familyName} ({familyMembersCount} membros)
-                </span>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-base">👨‍👩‍👧‍👦</span>
+                    <span className="font-black text-xs text-amber-950 truncate">
+                      {publisher.familyName.startsWith('Família') ? publisher.familyName : `Família ${publisher.familyName}`}
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-amber-200/90 text-amber-900 border border-amber-300 shrink-0">
+                      {familyMembersCount} pessoas
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300/80">
+                    1 Toque p/ Todos
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                   <button
                     type="button"
-                    onClick={() => onMarkFamily('presencial')}
-                    className="px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold cursor-pointer transition-colors active:scale-95"
-                    title={`Marcar todos da ${publisher.familyName} como Presencial`}
+                    onClick={() => {
+                      try { if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(25); } catch {}
+                      onMarkFamily('presencial');
+                    }}
+                    className="min-h-[44px] py-2 px-2 rounded-xl font-black text-xs bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-xs border border-emerald-700 flex items-center justify-center gap-1 transition-all cursor-pointer"
+                    title={`Marcar todos os ${familyMembersCount} membros da ${publisher.familyName} como Presencial`}
                   >
-                    🏛️ Família Presencial
+                    <span className="text-sm">🏛️</span>
+                    <span className="truncate">Família Presencial</span>
                   </button>
+
                   <button
                     type="button"
-                    onClick={() => onMarkFamily('zoom')}
-                    className="px-2 py-0.5 rounded bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-300 text-[10px] font-bold cursor-pointer transition-colors active:scale-95"
-                    title={`Marcar todos da ${publisher.familyName} como Zoom`}
+                    onClick={() => {
+                      try { if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(25); } catch {}
+                      onMarkFamily('zoom');
+                    }}
+                    className="min-h-[44px] py-2 px-2 rounded-xl font-black text-xs bg-purple-600 hover:bg-purple-700 active:scale-95 text-white shadow-xs border border-purple-700 flex items-center justify-center gap-1 transition-all cursor-pointer"
+                    title={`Marcar todos os ${familyMembersCount} membros da ${publisher.familyName} como Zoom`}
                   >
-                    📹 Família Zoom
+                    <span className="text-sm">📹</span>
+                    <span className="truncate">Família Zoom</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try { if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(25); } catch {}
+                      onMarkFamily('ausente');
+                    }}
+                    className="col-span-2 sm:col-span-1 min-h-[44px] py-2 px-2 rounded-xl font-bold text-xs bg-rose-100 hover:bg-rose-200 active:scale-95 text-rose-900 border border-rose-300 flex items-center justify-center gap-1 transition-all cursor-pointer"
+                    title={`Marcar todos os ${familyMembersCount} membros da ${publisher.familyName} como Ausente`}
+                  >
+                    <span className="text-xs">✕</span>
+                    <span className="truncate">Família Ausente</span>
                   </button>
                 </div>
               </div>
@@ -537,20 +571,6 @@ export const SwipeablePublisherCard: React.FC<SwipeablePublisherCardProps> = ({
                     {role}
                   </span>
                 ))}
-
-                {publisher.familyName && familyMembersCount && familyMembersCount > 1 && onMarkFamily && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onMarkFamily(currentStatus || 'presencial');
-                    }}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors cursor-pointer active:scale-95"
-                    title={`Marcar todos os ${familyMembersCount} membros da ${publisher.familyName}`}
-                  >
-                    <span>👨‍👩‍👧‍👦 Marcar Família ({familyMembersCount})</span>
-                  </button>
-                )}
 
                 {publisher.notes && (
                   <span className="text-[11px] text-slate-500 italic ml-1 truncate max-w-xs">
@@ -644,6 +664,70 @@ export const SwipeablePublisherCard: React.FC<SwipeablePublisherCardProps> = ({
                 {currentStatus === 'ausente' && (
                   <XCircle className="w-3.5 h-3.5 ml-0.5 text-rose-100" />
                 )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* DESTAQUE PARA CHAMADA POR FAMÍLIA EM 1 TOQUE (Modo Completo) */}
+        {!isSimplified && publisher.familyName && familyMembersCount && familyMembersCount > 1 && onMarkFamily && (
+          <div
+            className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-r from-amber-50 via-orange-50/70 to-amber-50 border-2 border-amber-300/90 shadow-2xs space-y-2 select-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-lg">👨‍👩‍👧‍👦</span>
+                <span className="font-black text-xs sm:text-sm text-amber-950 truncate">
+                  Chamada da {publisher.familyName.startsWith('Família') ? publisher.familyName : `Família ${publisher.familyName}`}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200/90 text-amber-900 border border-amber-300 shrink-0">
+                  {familyMembersCount} pessoas
+                </span>
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300/90 hidden sm:inline">
+                ⚡ 1 Toque p/ Todos
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  try { if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(25); } catch {}
+                  onMarkFamily('presencial');
+                }}
+                className="min-h-[46px] py-2 px-3 rounded-xl font-black text-xs sm:text-sm bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-xs border border-emerald-700 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                title={`Marcar todos os ${familyMembersCount} membros da ${publisher.familyName} como Presencial`}
+              >
+                <span className="text-base sm:text-lg">🏛️</span>
+                <span className="truncate">Família Presencial</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  try { if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(25); } catch {}
+                  onMarkFamily('zoom');
+                }}
+                className="min-h-[46px] py-2 px-3 rounded-xl font-black text-xs sm:text-sm bg-purple-600 hover:bg-purple-700 active:scale-95 text-white shadow-xs border border-purple-700 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                title={`Marcar todos os ${familyMembersCount} membros da ${publisher.familyName} como Zoom`}
+              >
+                <span className="text-base sm:text-lg">📹</span>
+                <span className="truncate">Família Zoom</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  try { if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(25); } catch {}
+                  onMarkFamily('ausente');
+                }}
+                className="col-span-2 sm:col-span-1 min-h-[46px] py-2 px-3 rounded-xl font-bold text-xs bg-rose-100 hover:bg-rose-200 active:scale-95 text-rose-900 border border-rose-300 flex items-center justify-center gap-1 transition-all cursor-pointer"
+                title={`Marcar todos os ${familyMembersCount} membros da ${publisher.familyName} como Ausente`}
+              >
+                <span className="text-sm">✕</span>
+                <span className="truncate">Família Ausente</span>
               </button>
             </div>
           </div>

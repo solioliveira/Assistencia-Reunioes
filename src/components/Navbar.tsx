@@ -34,6 +34,7 @@ interface NavbarProps {
   pendingQueueCount?: number;
   isSyncingQueue?: boolean;
   onManualSyncQueue?: () => void;
+  connectedDevicesCount?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -50,6 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   pendingQueueCount = 0,
   isSyncingQueue = false,
   onManualSyncQueue,
+  connectedDevicesCount = 1,
 }) => {
   const handleTabClick = (tab: ActiveTab) => {
     if (setActiveTab) setActiveTab(tab);
@@ -151,11 +153,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 type="button"
                 onClick={onOpenSyncModal}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-600/90 hover:bg-blue-600 text-white transition-all shadow-xs border border-blue-500/50 active:scale-95"
-                title="Sintonizar e conectar outros aparelhos"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-600/90 hover:bg-blue-600 text-white transition-all shadow-xs border border-blue-500/50 active:scale-95 cursor-pointer"
+                title={`Sintonizar e conectar outros aparelhos (${connectedDevicesCount} ativo${connectedDevicesCount > 1 ? 's' : ''})`}
               >
                 <Smartphone className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Sintonizar Aparelhos</span>
+                {connectedDevicesCount > 1 && (
+                  <span className="bg-blue-800 text-blue-100 px-1.5 py-0.2 rounded-full text-[10px] font-black">
+                    {connectedDevicesCount}
+                  </span>
+                )}
               </button>
             )}
 

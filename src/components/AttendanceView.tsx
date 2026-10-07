@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Copy,
   Edit2,
   Eye,
   EyeOff,
@@ -58,6 +59,7 @@ import { KeyboardShortcutsModal } from './KeyboardShortcutsModal';
 import { SwipeablePublisherCard, ZOOM_PRESETS, AUSENTE_PRESETS } from './SwipeablePublisherCard';
 import { FraternalCareModal } from './FraternalCareModal';
 import { WhatsAppShareModal } from './WhatsAppShareModal';
+import { CopyPreviousAttendanceModal } from './CopyPreviousAttendanceModal';
 
 function getPortugueseDayOfWeek(dateStr: string): string {
   if (!dateStr) return '';
@@ -111,6 +113,14 @@ interface AttendanceViewProps {
   autoPollSeconds?: number;
   isAutoPollActive?: boolean;
   onToggleAutoPoll?: () => void;
+  onCopyAttendanceFromMeeting?: (
+    sourceMeetingId: string,
+    targetMeetingId: string,
+    options: {
+      onlyPresent: boolean;
+      preserveExistingMarks: boolean;
+    }
+  ) => void;
   congregationName?: string;
   onRestoreTuesdaySaturday?: () => void;
 }
@@ -134,6 +144,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   onBatchMark,
   onBatchAttendanceChange,
   onClearAttendance,
+  onCopyAttendanceFromMeeting,
   onOpenNewMeetingModal,
   onOpenReport,
   onNavigateToTab,
@@ -170,7 +181,37 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   const [selectedGroup, setSelectedGroup] = useState<number | 'all'>('all');
   const [selectedFamilyFilter, setSelectedFamilyFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'presencial' | 'zoom' | 'ausente' | 'pendente'>('all');
+
+  // Modo Foco / Aba de Pendentes Padrão
+  const [isFocusModeDefault, setIsFocusModeDefault] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('attendance_focus_mode_default') === 'pendente';
+    } catch {
+      return false;
+    }
+  });
+
+  const [statusFilter, setStatusFilter] = useState<'all' | 'presencial' | 'zoom' | 'ausente' | 'pendente'>(() => {
+    try {
+      return localStorage.getItem('attendance_focus_mode_default') === 'pendente' ? 'pendente' : 'all';
+    } catch {
+      return 'all';
+    }
+  });
+
+  const handleToggleFocusModeDefault = (enabled: boolean) => {
+    setIsFocusModeDefault(enabled);
+    try {
+      if (enabled) {
+        localStorage.setItem('attendance_focus_mode_default', 'pendente');
+      } else {
+        localStorage.removeItem('attendance_focus_mode_default');
+      }
+    } catch {}
+  };
+
+  // Estados para Modal de Copiar Assistência Anterior
+  const [isCopyPreviousModalOpen, setIsCopyPreviousModalOpen] = useState<boolean>(false);
 
   // Estados para Modais de Pastoreio e WhatsApp
   const [isCareModalOpen, setIsCareModalOpen] = useState<boolean>(false);
@@ -554,6 +595,62 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         ? `${members.length} membro(s) marcados (Ancião: Discurso fora • Família: Acompanhando orador)`
         : `${members.length} membro(s) marcados como ${label}`;
     showToast(`Família ${famName}`, status, subtext);
+  };
+
+  const handleApplyPreviousAttendance = (
+    sourceMeetingId: string,
+    options: {
+      onlyPresent: boolean;
+      preserveExistingMarks: boolean;
+    }
+  ) => {
+    if (!activeMeeting) return;
+    const sourceMeeting = meetingList.find((m) => m.id === sourceMeetingId);
+
+    if (onCopyAttendanceFromMeeting) {
+      onCopyAttendanceFromMeeting(sourceMeetingId, activeMeeting.id, options);
+      showToast(
+        'Chamada Importada',
+        'presencial',
+        `Assistência da reunião de ${sourceMeeting?.date || 'anterior'} aplicada com sucesso!`
+      );
+      return;
+    }
+
+    const sourceAtt = (attendance && attendance[sourceMeetingId]) || {};
+    const currentAtt = activeAttendanceMap || {};
+
+    const idsPresencial: string[] = [];
+    const idsZoom: string[] = [];
+    const idsAusente: string[] = [];
+
+    safePublishers.forEach((pub) => {
+      if (!pub || pub.active === false) return;
+      if (options.preserveExistingMarks && currentAtt[pub.id]) return;
+
+      const st = sourceAtt[pub.id];
+      if (!st) return;
+
+      if (st === 'presencial') idsPresencial.push(pub.id);
+      else if (st === 'zoom') idsZoom.push(pub.id);
+      else if (st === 'ausente' && !options.onlyPresent) idsAusente.push(pub.id);
+    });
+
+    if (onBatchAttendanceChange) {
+      if (idsPresencial.length > 0) onBatchAttendanceChange(activeMeeting.id, idsPresencial, 'presencial');
+      if (idsZoom.length > 0) onBatchAttendanceChange(activeMeeting.id, idsZoom, 'zoom');
+      if (idsAusente.length > 0) onBatchAttendanceChange(activeMeeting.id, idsAusente, 'ausente');
+    } else if (onBatchMark) {
+      if (idsPresencial.length > 0) onBatchMark(idsPresencial, 'presencial');
+      if (idsZoom.length > 0) onBatchMark(idsZoom, 'zoom');
+      if (idsAusente.length > 0) onBatchMark(idsAusente, 'ausente');
+    }
+
+    showToast(
+      'Chamada Importada',
+      'presencial',
+      `Assistência da reunião de ${sourceMeeting?.date || 'anterior'} aplicada com sucesso!`
+    );
   };
 
   const handleClearBatch = () => {
@@ -1252,6 +1349,19 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
               <Share2 className="w-3.5 h-3.5 text-blue-600" />
               <span>Relatório</span>
             </button>
+
+            {/* BOTÃO COPIAR ASSISTÊNCIA DA REUNIÃO ANTERIOR */}
+            {activeMeeting && (
+              <button
+                type="button"
+                onClick={() => setIsCopyPreviousModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
+                title="Copiar assistência da reunião anterior (ou última terça/sábado) e ajustar apenas exceções"
+              >
+                <Copy className="w-3.5 h-3.5 text-blue-600" />
+                <span>Copiar da Anterior</span>
+              </button>
+            )}
 
             {/* BOTÃO RESTAURAR TERÇA E SÁBADO */}
             {onRestoreTuesdaySaturday && (
@@ -2184,27 +2294,236 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
 
       </div>
 
-      {/* 4. LISTA DE PUBLICADORES COM OS 3 BOTÕES DE MARCAÇÃO EXCLUSIVOS */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs text-slate-500 font-medium px-1">
-          <span>Mostrando {filteredPublishers.length} publicador(es)</span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setStatusFilter('all')}
-              className={`px-2 py-0.5 rounded ${statusFilter === 'all' ? 'bg-slate-800 text-white font-bold' : 'hover:bg-slate-100'}`}
-            >
-              Todos
-            </button>
-            <button
-              onClick={() => setStatusFilter('pendente')}
-              className={`px-2 py-0.5 rounded ${statusFilter === 'pendente' ? 'bg-amber-600 text-white font-bold' : 'hover:bg-slate-100'}`}
-            >
-              Pendentes ({counters.naoMarcados})
-            </button>
+      {/* 4. BARRA DE MODO FOCO, FILTRO DE STATUS E LISTA DE PUBLICADORES */}
+      <div className="space-y-3">
+        {/* BANNER DE MARCAÇÃO FAMILIAR RÁPIDA CASO UM FILTRO DE FAMÍLIA ESTEJA ATIVO */}
+        {selectedFamilyFilter !== 'all' && (
+          <div className="p-3 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white rounded-2xl shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl">👨‍👩‍👧‍👦</span>
+              <div>
+                <span className="text-[10px] uppercase font-black tracking-wider text-amber-100">
+                  Filtro Familiar Ativo
+                </span>
+                <h4 className="text-sm sm:text-base font-black leading-tight text-white">
+                  {selectedFamilyFilter.startsWith('Família') ? selectedFamilyFilter : `Família ${selectedFamilyFilter}`} ({filteredPublishers.length} membros)
+                </h4>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => handleMarkFamily(selectedFamilyFilter, 'presencial')}
+                className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>🏛️ Todos Presenciais</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleMarkFamily(selectedFamilyFilter, 'zoom')}
+                className="px-3 py-2 bg-purple-700 hover:bg-purple-800 active:scale-95 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>📹 Todos Zoom</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleMarkFamily(selectedFamilyFilter, 'ausente')}
+                className="px-2.5 py-2 bg-rose-700 hover:bg-rose-800 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+              >
+                <span>✕ Ausentes</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedFamilyFilter('all')}
+                className="p-2 bg-white/20 hover:bg-white/30 text-white font-bold text-xs rounded-xl transition-all cursor-pointer"
+                title="Limpar filtro de família"
+              >
+                ✕
+              </button>
+            </div>
           </div>
+        )}
+
+        {/* BARRA PRINCIPAL DE MODO FOCO & STATUS TABS */}
+        <div className="bg-white rounded-2xl p-2.5 sm:p-3 border border-slate-200/90 shadow-2xs space-y-2.5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+            {/* Segmented Control / Tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none w-full lg:w-auto">
+              {/* BOTÃO 1: MODO FOCO (PENDENTES) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter(statusFilter === 'pendente' ? 'all' : 'pendente');
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap border active:scale-95 ${
+                  statusFilter === 'pendente'
+                    ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-sm ring-2 ring-amber-400/70'
+                    : counters.naoMarcados > 0
+                    ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
+                }`}
+                title="Modo Foco: exibe apenas os publicadores que ainda faltam ser marcados"
+              >
+                <Zap className={`w-3.5 h-3.5 ${statusFilter === 'pendente' ? 'text-slate-950' : 'text-amber-600'}`} />
+                <span>⚡ Modo Foco: Pendentes</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                    statusFilter === 'pendente'
+                      ? 'bg-slate-950 text-amber-300'
+                      : counters.naoMarcados > 0
+                      ? 'bg-amber-600 text-white animate-pulse'
+                      : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {counters.naoMarcados}
+                </span>
+              </button>
+
+              {/* BOTÃO 2: TODOS */}
+              <button
+                type="button"
+                onClick={() => setStatusFilter('all')}
+                className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap border ${
+                  statusFilter === 'all'
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                }`}
+              >
+                <span>Todos ({filteredCounters.total})</span>
+              </button>
+
+              {/* BOTÃO 3: PRESENCIAL */}
+              <button
+                type="button"
+                onClick={() => setStatusFilter('presencial')}
+                className={`px-2.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap border ${
+                  statusFilter === 'presencial'
+                    ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
+                    : 'bg-emerald-50/70 hover:bg-emerald-100 text-emerald-900 border-emerald-200'
+                }`}
+              >
+                <span>🏛️ {filteredCounters.presencial} Presencial</span>
+              </button>
+
+              {/* BOTÃO 4: ZOOM */}
+              <button
+                type="button"
+                onClick={() => setStatusFilter('zoom')}
+                className={`px-2.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap border ${
+                  statusFilter === 'zoom'
+                    ? 'bg-purple-600 text-white border-purple-700 shadow-xs'
+                    : 'bg-purple-50/70 hover:bg-purple-100 text-purple-900 border-purple-200'
+                }`}
+              >
+                <span>📹 {filteredCounters.zoom} Zoom</span>
+              </button>
+
+              {/* BOTÃO 5: AUSENTES */}
+              <button
+                type="button"
+                onClick={() => setStatusFilter('ausente')}
+                className={`px-2.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap border ${
+                  statusFilter === 'ausente'
+                    ? 'bg-rose-600 text-white border-rose-700 shadow-xs'
+                    : 'bg-rose-50/70 hover:bg-rose-100 text-rose-900 border-rose-200'
+                }`}
+              >
+                <span>✕ {filteredCounters.ausente} Ausentes</span>
+              </button>
+            </div>
+
+            {/* Opção para salvar preferência de iniciar sempre em Modo Foco */}
+            <div className="flex items-center justify-between sm:justify-end gap-3 text-xs text-slate-500 shrink-0">
+              <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isFocusModeDefault}
+                  onChange={(e) => handleToggleFocusModeDefault(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded text-amber-600 focus:ring-amber-500 border-slate-300"
+                />
+                <span className="text-[11px] font-semibold text-slate-600">
+                  Iniciar sempre em Modo Foco
+                </span>
+              </label>
+
+              {/* Atalho rápido para Copiar Anterior se houver pendentes */}
+              {activeMeeting && (
+                <button
+                  type="button"
+                  onClick={() => setIsCopyPreviousModalOpen(true)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg cursor-pointer transition-colors"
+                  title="Copiar assistência da reunião anterior"
+                >
+                  <Copy className="w-3 h-3 text-blue-600" />
+                  <span>Copiar Anterior</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Banner Informativo quando Modo Foco está ativo */}
+          {statusFilter === 'pendente' && (
+            <div className="p-2 sm:p-2.5 rounded-xl bg-amber-50/90 border border-amber-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-950">
+              <div className="flex items-center gap-2">
+                <span className="text-base">⚡</span>
+                <span className="font-semibold">
+                  <strong>Modo Foco Ativo:</strong> Exibindo apenas quem ainda falta ser chamado ({counters.naoMarcados} restantes). A lista encolhe à medida que você marca!
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('all')}
+                className="text-[11px] font-bold text-amber-800 underline hover:text-amber-950 self-start sm:self-auto cursor-pointer"
+              >
+                Ver lista completa
+              </button>
+            </div>
+          )}
         </div>
 
-        {filteredPublishers.length === 0 ? (
+        {/* MENSAGEM DE COMEMORAÇÃO QUANDO MODO FOCO ZERA (0 PENDENTES) */}
+        {statusFilter === 'pendente' && filteredPublishers.length === 0 ? (
+          <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-100 rounded-3xl p-6 sm:p-8 text-center border-2 border-emerald-300 shadow-sm space-y-3 animate-in fade-in">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-md text-2xl">
+              🎉
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-lg sm:text-xl font-black text-emerald-950">
+                Chamada 100% Concluída!
+              </h3>
+              <p className="text-xs sm:text-sm text-emerald-800 max-w-md mx-auto">
+                Todos os <strong>{counters.totalPublicadores} publicadores</strong> foram chamados e verificados nesta reunião!
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-3 px-4 py-2 bg-white/80 rounded-xl border border-emerald-200 text-xs font-bold text-emerald-900">
+              <span>🏛️ {counters.presencial} Presenciais</span>
+              <span>•</span>
+              <span>📹 {counters.zoom} Zoom</span>
+              <span>•</span>
+              <span>✕ {counters.ausente} Ausentes</span>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setStatusFilter('all')}
+                className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs sm:text-sm border border-slate-200 shadow-xs cursor-pointer transition-all active:scale-95"
+              >
+                Ver Todos os Publicadores
+              </button>
+              {onSaveAndSyncAttendance && activeMeeting && (
+                <button
+                  type="button"
+                  onClick={() => onSaveAndSyncAttendance(activeMeeting.id)}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md cursor-pointer transition-all active:scale-95 flex items-center gap-1.5"
+                >
+                  <CheckCheck className="w-4 h-4" />
+                  <span>Salvar e Sincronizar Agora</span>
+                </button>
+              )}
+            </div>
+          </div>
+        ) : filteredPublishers.length === 0 ? (
           <div className="bg-white rounded-2xl p-10 text-center border border-slate-200">
             <Users className="w-12 h-12 text-slate-300 mx-auto mb-2" />
             <p className="text-slate-700 font-semibold text-sm">Nenhum publicador encontrado</p>
@@ -2389,19 +2708,82 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
         </div>
       </div>
 
-      {/* BARRA FIXA INFERIOR PARA MOBILE COM OS DOIS BOTÕES */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-700/80 p-2.5 px-4 shadow-2xl">
-        <div className="flex items-center justify-between gap-3 max-w-md mx-auto">
-          <div className="flex flex-col">
-            <span className="text-xs font-black text-white">
-              {displayCounters.totalGeral} presentes
-            </span>
-            <span className="text-[10px] text-slate-400">
-              {displayCounters.naoMarcados > 0 ? `${displayCounters.naoMarcados} pendentes` : '100% chamados'}
-            </span>
+      {/* PAINEL FLUTUANTE INFERIOR DE AÇÃO RÁPIDA (OTIMIZADO PARA IPHONE E IPAD / TABLETS) */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-700/80 p-2.5 sm:p-3 px-3 sm:px-6 shadow-2xl pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-all">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 max-w-5xl mx-auto">
+          {/* Lado Esquerdo: Chips de Resumo em Tempo Real e Alternador de Modo Foco */}
+          <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 text-xs font-bold">
+              <span className="text-white flex items-center gap-1 bg-slate-800/90 px-2.5 py-1.5 rounded-xl border border-slate-700 shadow-2xs">
+                <strong className="text-emerald-400 font-mono text-sm sm:text-base">{displayCounters.totalGeral}</strong>
+                <span className="text-slate-300 text-[11px]">presentes</span>
+              </span>
+
+              <span className="text-emerald-300 bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-800/80 text-[11px] hidden sm:inline-flex items-center gap-1">
+                <span>🏛️</span>
+                <span>{displayCounters.presencial}</span>
+              </span>
+
+              <span className="text-purple-300 bg-purple-950/60 px-2 py-1 rounded-lg border border-purple-800/80 text-[11px] hidden sm:inline-flex items-center gap-1">
+                <span>📹</span>
+                <span>{displayCounters.zoom}</span>
+              </span>
+
+              <span className="text-rose-300 bg-rose-950/60 px-2 py-1 rounded-lg border border-rose-800/80 text-[11px] hidden sm:inline-flex items-center gap-1">
+                <span>✕</span>
+                <span>{displayCounters.ausente}</span>
+              </span>
+
+              {/* Botão interativo para alternar Modo Foco (Pendentes) pelo rodapé */}
+              <button
+                type="button"
+                onClick={() => setStatusFilter(statusFilter === 'pendente' ? 'all' : 'pendente')}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 active:scale-95 cursor-pointer border shadow-2xs ${
+                  statusFilter === 'pendente'
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 font-black ring-2 ring-amber-300'
+                    : displayCounters.naoMarcados > 0
+                    ? 'bg-amber-950/80 text-amber-300 border-amber-700/80 hover:bg-amber-900/80'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+                title="Alternar Modo Foco (Pendentes) pelo rodapé"
+              >
+                <Zap className={`w-3.5 h-3.5 ${statusFilter === 'pendente' ? 'text-slate-950' : 'text-amber-400'}`} />
+                <span>
+                  {statusFilter === 'pendente'
+                    ? 'Foco Ativo'
+                    : displayCounters.naoMarcados > 0
+                    ? `${displayCounters.naoMarcados} pendentes`
+                    : '100% chamados'}
+                </span>
+              </button>
+            </div>
+
+            {/* Status de Nuvem ao Vivo */}
+            <div className="hidden md:flex items-center gap-1.5 text-[11px] text-slate-400">
+              <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+              <span>{isOnline ? 'Nuvem Conectada' : 'Offline'}</span>
+              {connectedDevicesCount > 1 && (
+                <span className="text-slate-400 text-[10px]">({connectedDevicesCount} aparelhos)</span>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Lado Direito: Ações Rápidas ao Alcance do Polegar (iPad / iPhone) */}
+          <div className="flex items-center gap-2 justify-end">
+            {/* Botão Copiar Anterior no Rodapé */}
+            {activeMeeting && (
+              <button
+                type="button"
+                onClick={() => setIsCopyPreviousModalOpen(true)}
+                className="hidden lg:inline-flex items-center gap-1.5 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-blue-300 rounded-xl text-xs font-bold border border-slate-700 transition-colors cursor-pointer active:scale-95 min-h-[44px]"
+                title="Copiar assistência da reunião anterior"
+              >
+                <Copy className="w-3.5 h-3.5 text-blue-400" />
+                <span>Copiar Anterior</span>
+              </button>
+            )}
+
+            {/* Botão Atualizar */}
             {onRefreshData && (
               <button
                 type="button"
@@ -2409,14 +2791,15 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                   await onRefreshData();
                 }}
                 disabled={isRefreshingAttendance}
-                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs border border-slate-600 flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
-                title="Atualizar chamada"
+                className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold rounded-xl text-xs border border-slate-700 flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer min-h-[44px]"
+                title="Atualizar chamada do servidor"
               >
                 <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${isRefreshingAttendance ? 'animate-spin' : ''}`} />
-                <span>Atualizar</span>
+                <span className="hidden sm:inline">Atualizar</span>
               </button>
             )}
 
+            {/* BOTÃO PRINCIPAL: SALVAR E SINCRONIZAR (Generoso para polegar em iPhone/iPad) */}
             {onSaveAndSyncAttendance && (
               <button
                 type="button"
@@ -2429,15 +2812,21 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
                   }
                 }}
                 disabled={isSyncingAttendance}
-                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md active:scale-95 disabled:opacity-50"
-                title="Salvar e sincronizar agora"
+                className="flex-1 sm:flex-initial px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50 transition-all disabled:opacity-50 cursor-pointer min-h-[44px] min-w-[140px]"
+                title="Salvar e sincronizar agora em tempo real com todos os aparelhos"
               >
                 {isSyncingAttendance ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <RefreshCw className="w-4 h-4 animate-spin text-emerald-100" />
                 ) : (
-                  <CheckCheck className="w-3.5 h-3.5 text-emerald-100" />
+                  <CheckCheck className="w-4 h-4 text-emerald-100" />
                 )}
-                <span>Salvar</span>
+                <span>
+                  {isSyncingAttendance
+                    ? 'Salvando...'
+                    : lastSavedTimestamp[activeMeeting?.id || '']
+                    ? `Salvo (${lastSavedTimestamp[activeMeeting?.id || '']})`
+                    : 'Salvar e Sincronizar'}
+                </span>
               </button>
             )}
           </div>
@@ -2690,6 +3079,18 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
           notesMap={activeNotesMap}
           publishers={safePublishers}
           congregationName={congregationName}
+        />
+      )}
+
+      {/* Modal de Copiar Assistência da Reunião Anterior */}
+      {activeMeeting && (
+        <CopyPreviousAttendanceModal
+          isOpen={isCopyPreviousModalOpen}
+          onClose={() => setIsCopyPreviousModalOpen(false)}
+          activeMeeting={activeMeeting}
+          allMeetings={meetingList}
+          attendance={attendance || {}}
+          onApplyAttendance={handleApplyPreviousAttendance}
         />
       )}
 

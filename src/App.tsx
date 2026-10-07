@@ -644,6 +644,94 @@ export function App() {
     });
   };
 
+  // COPIAR ASSISTÊNCIA DE REUNIÃO ANTERIOR COM SINCRONIZAÇÃO EM TEMPO REAL
+  const handleCopyAttendanceFromMeeting = (
+    sourceMeetingId: string,
+    targetMeetingId: string,
+    options: {
+      onlyPresent: boolean;
+      preserveExistingMarks: boolean;
+    }
+  ) => {
+    setDatabase((prev) => {
+      const sourceAtt = prev.attendance[sourceMeetingId] || {};
+      const currentAtt = { ...(prev.attendance[targetMeetingId] || {}) };
+      const sourceNotes = prev.attendanceNotes?.[sourceMeetingId] || {};
+      const currentNotes = { ...(prev.attendanceNotes?.[targetMeetingId] || {}) };
+
+      prev.publishers.forEach((pub) => {
+        if (!pub || pub.active === false) return;
+        if (options.preserveExistingMarks && currentAtt[pub.id]) {
+          return; // Preserva o que já foi marcado
+        }
+        const st = sourceAtt[pub.id];
+        if (!st) return;
+
+        if (options.onlyPresent && st === 'ausente') {
+          return; // Deixa ausente em branco (pendente)
+        }
+
+        currentAtt[pub.id] = st;
+        if (sourceNotes[pub.id]) {
+          currentNotes[pub.id] = sourceNotes[pub.id];
+        }
+      });
+
+      const newAttendance = {
+        ...prev.attendance,
+        [targetMeetingId]: currentAtt,
+      };
+
+      const newNotes = {
+        ...(prev.attendanceNotes || {}),
+        [targetMeetingId]: currentNotes,
+      };
+
+      const device = getDeviceInfo();
+      const nowIso = new Date().toISOString();
+      const updatedDb = {
+        ...prev,
+        attendance: newAttendance,
+        attendanceNotes: newNotes,
+        syncMetadata: {
+          lastEditorDeviceId: device.deviceId,
+          lastEditorDeviceName: device.deviceName,
+          lastEditedAt: nowIso,
+          lastEditedMeetingId: targetMeetingId,
+          lastEditedDescription: 'Assistência copiada da reunião anterior',
+        },
+        lastUpdated: nowIso,
+      };
+
+      const editorInfo = {
+        deviceId: device.deviceId,
+        deviceName: device.deviceName,
+        description: 'Assistência copiada da reunião anterior',
+      };
+
+      if (isOnline) {
+        sendAttendanceToServer(targetMeetingId, currentAtt, currentNotes, editorInfo).catch(() => {
+          enqueueAttendanceSync(targetMeetingId, currentAtt, currentNotes);
+        });
+        if (isFirebaseActive) {
+          syncAttendanceToFirestore(targetMeetingId, currentAtt, currentNotes, editorInfo)
+            .then((success) => {
+              if (!success) enqueueAttendanceSync(targetMeetingId, currentAtt, currentNotes);
+            })
+            .catch(() => enqueueAttendanceSync(targetMeetingId, currentAtt, currentNotes));
+        }
+      } else {
+        enqueueAttendanceSync(targetMeetingId, currentAtt, currentNotes);
+      }
+
+      saveDatabase(updatedDb);
+      return updatedDb;
+    });
+
+    setSyncToastMessage('📋 Assistência da reunião anterior copiada e sincronizada com sucesso!');
+    setTimeout(() => setSyncToastMessage(null), 5000);
+  };
+
   // SALVAR E SINCRONIZAR CHAMADA DA REUNIÃO ATIVA
   const handleSaveAndSyncAttendance = async (meetingId: string) => {
     setIsSyncingAttendance(true);
@@ -758,19 +846,40 @@ export function App() {
     }
   };
 
-  // Auto-polling em segundo plano a cada 15 segundos para garantir paridade total entre aparelhos
+  // Sincronização e reconexão ativa em segundo plano para iPhone e iPad
   useEffect(() => {
-    if (!isOnline || !isAutoPollActive) return;
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && isOnline) {
+        // Ao desbloquear o iPhone/iPad ou retornar para a aba, sincroniza em silêncio imediatamente
+        handleRefreshAttendanceData(true);
+      }
+    };
+
+    const handleWindowFocus = () => {
+      if (isOnline) handleRefreshAttendanceData(true);
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+    window.addEventListener('focus', handleWindowFocus);
 
     const interval = setInterval(() => {
-      // Evita chamadas desnecessárias se a aba do navegador estiver minimizada/em segundo plano
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
         return;
       }
-      handleRefreshAttendanceData(true);
-    }, 15000);
+      if (isOnline && isAutoPollActive) {
+        handleRefreshAttendanceData(true);
+      }
+    }, 12000);
 
-    return () => clearInterval(interval);
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+      window.removeEventListener('focus', handleWindowFocus);
+      clearInterval(interval);
+    };
   }, [isOnline, isAutoPollActive, isFirebaseActive]);
 
   // ALTERAÇÃO DIRETA DA DATA DA REUNIÃO
@@ -1031,6 +1140,7 @@ export function App() {
         pendingQueueCount={pendingQueue.length}
         isSyncingQueue={isSyncingQueue}
         onManualSyncQueue={flushPendingQueue}
+        connectedDevicesCount={connectedDevicesCount}
       />
 
       {/* Banner de Aviso de Conexão Offline no Topo */}
@@ -1158,14 +1268,48 @@ export function App() {
                 setDatabase((prev) => {
                   const meetingAtt = { ...(prev.attendance[selectedMeetingId] || {}) };
                   pubIds.forEach((pid) => delete meetingAtt[pid]);
-                  return {
+                  const nowIso = new Date().toISOString();
+                  const device = getDeviceInfo();
+                  const updatedDb = {
                     ...prev,
                     attendance: { ...prev.attendance, [selectedMeetingId]: meetingAtt },
-                    lastUpdated: new Date().toISOString(),
+                    syncMetadata: {
+                      lastEditorDeviceId: device.deviceId,
+                      lastEditorDeviceName: device.deviceName,
+                      lastEditedAt: nowIso,
+                      lastEditedMeetingId: selectedMeetingId,
+                      lastEditedDescription: 'Marcação limpa (pendente)',
+                    },
+                    lastUpdated: nowIso,
                   };
+
+                  const editorInfo = {
+                    deviceId: device.deviceId,
+                    deviceName: device.deviceName,
+                    description: 'Marcação limpa (pendente)',
+                  };
+
+                  if (isOnline) {
+                    sendAttendanceToServer(selectedMeetingId, meetingAtt, updatedDb.attendanceNotes?.[selectedMeetingId], editorInfo).catch(() => {
+                      enqueueAttendanceSync(selectedMeetingId, meetingAtt, updatedDb.attendanceNotes?.[selectedMeetingId]);
+                    });
+                    if (isFirebaseActive) {
+                      syncAttendanceToFirestore(selectedMeetingId, meetingAtt, updatedDb.attendanceNotes?.[selectedMeetingId], editorInfo)
+                        .then((success) => {
+                          if (!success) enqueueAttendanceSync(selectedMeetingId, meetingAtt, updatedDb.attendanceNotes?.[selectedMeetingId]);
+                        })
+                        .catch(() => enqueueAttendanceSync(selectedMeetingId, meetingAtt, updatedDb.attendanceNotes?.[selectedMeetingId]));
+                    }
+                  } else {
+                    enqueueAttendanceSync(selectedMeetingId, meetingAtt, updatedDb.attendanceNotes?.[selectedMeetingId]);
+                  }
+
+                  saveDatabase(updatedDb);
+                  return updatedDb;
                 });
               }
             }}
+            onCopyAttendanceFromMeeting={handleCopyAttendanceFromMeeting}
             onOpenNewMeetingModal={() => setActiveTab('meetings')}
             onOpenReport={(meeting) => {
               setSelectedMeetingId(meeting.id);
