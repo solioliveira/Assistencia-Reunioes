@@ -1,30 +1,806 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: var(--primary, #2563eb);
-  --color-primary-hover: var(--primary-hover, #1d4ed8);
+  --color-primary: var(--primary, #3b4fd8);
+  --color-primary-hover: var(--primary-hover, #2f40b5);
   --color-primary-light: var(--primary-light, #eff6ff);
   --color-primary-subtle: var(--primary-subtle, #dbeafe);
   --color-primary-border: var(--primary-border, #bfdbfe);
   --color-primary-text: var(--primary-text, #1e40af);
   --color-primary-dark: var(--primary-dark, #1e3a8a);
-  
+
   --color-blue-50: var(--primary-light, #eff6ff);
   --color-blue-100: var(--primary-subtle, #dbeafe);
   --color-blue-200: var(--primary-border, #bfdbfe);
   --color-blue-500: var(--primary, #3b82f6);
-  --color-blue-600: var(--primary, #2563eb);
-  --color-blue-700: var(--primary-hover, #1d4ed8);
+  --color-blue-600: var(--primary, #3b4fd8);
+  --color-blue-700: var(--primary-hover, #2f40b5);
   --color-blue-800: var(--primary-text, #1e40af);
   --color-blue-900: var(--primary-dark, #1e3a8a);
 }
 
 :root {
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
+  --bg: #f3f5f9;
+  --card: #ffffff;
+  --ink: #1c2430;
+  --mute: #6b7685;
+  --line: #e3e8ef;
+  --pres: #2e9e6a;
+  --zoom: #3b82f6;
+  --aus: #e5484d;
+  --vis: #8b5cf6;
+  --none: #e9edf3;
+  --accent: #3b4fd8;
+  --shadow: 0 1px 2px rgba(20, 30, 50, 0.06), 0 4px 14px rgba(20, 30, 50, 0.06);
+
+  --primary: #3b4fd8;
+  --primary-hover: #2f40b5;
   --primary-light: #eff6ff;
   --primary-subtle: #dbeafe;
   --primary-border: #bfdbfe;
   --primary-text: #1e40af;
   --primary-dark: #1e3a8a;
 }
+
+:root[data-theme="dark"] {
+  --bg: #0f1318;
+  --card: #1a2029;
+  --ink: #e8ecf2;
+  --mute: #8f9aab;
+  --line: #29313c;
+  --none: #2b333f;
+  --accent: #7b8cff;
+  --shadow: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1318;
+    --card: #1a2029;
+    --ink: #e8ecf2;
+    --mute: #8f9aab;
+    --line: #29313c;
+    --none: #2b333f;
+    --accent: #7b8cff;
+    --shadow: none;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.claude-app .top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.claude-app .row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.claude-app .title {
+  font-weight: 700;
+  font-size: 17px;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.claude-app .badge {
+  font-size: 12px;
+  color: var(--mute);
+  white-space: nowrap;
+}
+
+.claude-app select,
+.claude-app input[type="search"],
+.claude-app input[type="date"],
+.claude-app input[type="text"] {
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  font: inherit;
+  min-height: 48px;
+  width: 100%;
+}
+
+.claude-app .row select {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.claude-app .row .ibtn {
+  flex: none;
+}
+
+.claude-app .row input[type="search"] {
+  flex: 1;
+  width: auto;
+}
+
+.claude-app .ibtn {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.claude-app .primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.claude-app .mt {
+  margin-top: 8px;
+}
+
+.claude-app .seg {
+  display: flex;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.claude-app .seg button {
+  flex: 1;
+  border: 0;
+  background: none;
+  padding: 11px 12px;
+  min-height: 46px;
+}
+
+.claude-app .seg button.on {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.claude-app .chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 0 2px;
+  scrollbar-width: none;
+}
+
+.claude-app .chips::-webkit-scrollbar {
+  display: none;
+}
+
+.claude-app .chip {
+  flex: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 9px 14px;
+  font-size: 14px;
+  min-height: 40px;
+}
+
+.claude-app .chip.on {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
+
+.claude-app .list {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 12px;
+}
+
+.claude-app .ghead {
+  position: sticky;
+  top: var(--hh, 190px);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg);
+  padding: 12px 2px 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.claude-app .ghead .prog {
+  margin-left: auto;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--mute);
+}
+
+.claude-app .gbar {
+  height: 5px;
+  background: var(--line);
+  border-radius: 9px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.claude-app .gbar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+
+.claude-app .item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px 8px 8px 14px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow);
+}
+
+.claude-app .item .nm {
+  flex: 1;
+  min-width: 0;
+}
+
+.claude-app .item .nm b {
+  font-weight: 600;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.claude-app .item .why {
+  font-size: 13px;
+  color: var(--mute);
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  text-align: left;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claude-app .st {
+  min-width: 120px;
+  min-height: 54px;
+  border-radius: 12px;
+  border: 0;
+  font-weight: 700;
+  font-size: 15px;
+  background: var(--none);
+  color: var(--mute);
+}
+
+.claude-app .st.presencial {
+  background: var(--pres);
+  color: #fff;
+}
+
+.claude-app .st.zoom {
+  background: var(--zoom);
+  color: #fff;
+}
+
+.claude-app .st.ausente {
+  background: var(--aus);
+  color: #fff;
+}
+
+.claude-app .foot {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.claude-app .foot .in {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.claude-app .cnt {
+  display: flex;
+  gap: 9px;
+  flex: 1;
+  font-size: 11px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.claude-app .cnt b {
+  font-size: 18px;
+  display: block;
+  line-height: 1.1;
+}
+
+.claude-app .cnt span {
+  color: var(--mute);
+}
+
+.claude-app .cnt .p b {
+  color: var(--pres);
+}
+
+.claude-app .cnt .z b {
+  color: var(--zoom);
+}
+
+.claude-app .cnt .a b {
+  color: var(--aus);
+}
+
+.claude-app .cnt .v b {
+  color: var(--vis);
+}
+
+.claude-app .fin {
+  min-height: 52px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.claude-app .ov {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(10, 14, 20, 0.55);
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.claude-app .ov.show {
+  display: flex;
+}
+
+.claude-app .sheet {
+  background: var(--card);
+  color: var(--ink);
+  width: 100%;
+  max-width: 560px;
+  border-radius: 20px 20px 0 0;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+  max-height: 90vh;
+  overflow: auto;
+}
+
+@media (min-width: 640px) {
+  .claude-app .ov {
+    align-items: center;
+  }
+  .claude-app .sheet {
+    border-radius: 20px;
+  }
+}
+
+.claude-app .sheet h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.claude-app .sheet p {
+  color: var(--mute);
+  margin: 4px 0 12px;
+}
+
+.claude-app .lab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.claude-app .lab input {
+  width: 22px;
+  height: 22px;
+}
+
+.claude-app .snack {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  max-width: 520px;
+  margin: 0 auto;
+  background: #1c2430;
+  color: #fff;
+  border-radius: 12px;
+  padding: 8px 8px 8px 14px;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.claude-app .snack.show {
+  display: flex;
+}
+
+.claude-app .snack span {
+  flex: 1;
+  font-size: 14px;
+}
+
+.claude-app .snack button {
+  background: none;
+  border: 0;
+  color: #9db0ff;
+  font-weight: 700;
+  padding: 10px 8px;
+}
+
+.claude-app .empty {
+  color: var(--mute);
+  text-align: center;
+  padding: 30px 0;
+}
+
+.claude-app .err {
+  color: var(--aus);
+  font-size: 14px;
+  min-height: 20px;
+  margin-top: 8px;
+}
+
+.claude-app .small {
+  font-size: 12px;
+  color: var(--mute);
+}
+
+/* Painel */
+.claude-app .card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+.claude-app .card h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.claude-app .kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.claude-app .kpi .n {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.claude-app .kpi .l {
+  color: var(--mute);
+  font-size: 13px;
+}
+
+.claude-app .kpi .d {
+  font-size: 12px;
+  color: var(--mute);
+  margin-top: 2px;
+}
+
+.claude-app .grid2 {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (max-width: 800px) {
+  .claude-app .grid2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.claude-app .legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--mute);
+  margin-top: 8px;
+}
+
+.claude-app .dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+.claude-app .chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.claude-app .chart text {
+  fill: var(--mute);
+  font-size: 11px;
+}
+
+.claude-app .alert {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.claude-app .alert:last-child {
+  border: 0;
+}
+
+.claude-app .alert small {
+  color: var(--mute);
+  display: block;
+}
+
+.claude-app .bdg {
+  background: color-mix(in srgb, var(--aus) 15%, transparent);
+  color: var(--aus);
+  border-radius: 99px;
+  padding: 2px 10px;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  align-self: center;
+}
+
+.claude-app .groups {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.claude-app .groups th {
+  text-align: left;
+  color: var(--mute);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.claude-app .groups td,
+.claude-app .groups th {
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.claude-app .pbar {
+  height: 7px;
+  background: var(--line);
+  border-radius: 9px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.claude-app .pbar i {
+  display: block;
+  height: 100%;
+  background: var(--pres);
+}
+
+.claude-app .matrix-wrap {
+  overflow: auto;
+  max-height: 560px;
+  margin-top: 12px;
+}
+
+.claude-app table.m {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-size: 13px;
+}
+
+.claude-app .m th,
+.claude-app .m td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+  white-space: nowrap;
+  background: var(--card);
+}
+
+.claude-app .m thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  color: var(--mute);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.claude-app .m .name {
+  position: sticky;
+  left: 0;
+  text-align: left;
+  z-index: 1;
+  min-width: 170px;
+  border-right: 1px solid var(--line);
+}
+
+.claude-app .m thead .name {
+  z-index: 3;
+}
+
+.claude-app .m .name small {
+  color: var(--mute);
+  margin-left: 6px;
+}
+
+.claude-app .c {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.claude-app .c.presencial {
+  background: var(--pres);
+}
+
+.claude-app .c.zoom {
+  background: var(--zoom);
+}
+
+.claude-app .c.ausente {
+  background: var(--aus);
+}
+
+.claude-app .c.none {
+  background: var(--none);
+  color: var(--mute);
+}
+
+.claude-app .dot-pres {
+  background: var(--pres);
+}
+
+.claude-app .dot-zoom {
+  background: var(--zoom);
+}
+
+.claude-app .dot-vis {
+  background: var(--vis);
+}
+
+.claude-app .dot-aus {
+  background: var(--aus);
+}
+
+.claude-app .btn-vis {
+  min-height: 54px;
+  min-width: 54px;
+  font-size: 22px;
+}
+
+.claude-app .vis-num {
+  min-width: 30px;
+  text-align: center;
+  font-size: 20px;
+}
+
+.claude-app .btn-edit-pub {
+  min-width: 44px;
+  min-height: 54px;
+  padding: 0 10px;
+}
+
+.claude-app .chip-grp {
+  min-height: 36px;
+  padding: 4px 10px;
+}
+
+.claude-app .btn-danger {
+  background: var(--aus);
+  color: #fff;
+  border-color: transparent;
+}
+
+.claude-app .text-danger {
+  color: var(--aus);
+}
+
+.claude-app .summary-box {
+  width: 100%;
+  height: 200px;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.claude-app .toast-wrap {
+  max-width: 900px;
+  margin: 8px auto 0;
+  padding: 0 12px;
+}
+
+.claude-app .toast-bar {
+  background: var(--pres);
+  color: #fff;
+  border-color: transparent;
+  padding: 10px 14px;
+}
+
+.claude-app .toast-close {
+  background: none;
+  border: 0;
+  color: #fff;
+  font-weight: 700;
+}
+
+.claude-app .assist-total-line {
+  color: var(--ink);
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+

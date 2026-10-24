@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3b4fd8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Chamada da Reunião</title>
+<style>
+:root{--bg:#f3f5f9;--card:#fff;--ink:#1c2430;--mute:#6b7685;--line:#e3e8ef;--pres:#2e9e6a;--zoom:#3b82f6;--aus:#e5484d;--vis:#8b5cf6;--none:#e9edf3;--accent:#3b4fd8;--shadow:0 1px 2px rgba(20,30,50,.06),0 4px 14px rgba(20,30,50,.06)}
+:root[data-theme=dark]{--bg:#0f1318;--card:#1a2029;--ink:#e8ecf2;--mute:#8f9aab;--line:#29313c;--none:#2b333f;--accent:#7b8cff;--shadow:none}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0f1318;--card:#1a2029;--ink:#e8ecf2;--mute:#8f9aab;--line:#29313c;--none:#2b333f;--accent:#7b8cff;--shadow:none}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-top:env(safe-area-inset-top,0px);padding-bottom:calc(92px + env(safe-area-inset-bottom,0px))}
+button{font:inherit;color:inherit;cursor:pointer}
+.top{position:sticky;top:0;z-index:20;background:var(--bg);padding:10px 12px 8px;border-bottom:1px solid var(--line)}
+.row{display:flex;gap:8px;align-items:center}
+.title{font-weight:700;font-size:17px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{font-size:12px;color:var(--mute);white-space:nowrap}
+select,input[type=search],input[type=date],input[type=text]{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;min-height:48px;width:100%}
+.row select{flex:1;min-width:0;width:auto}.row .ibtn{flex:none}.row input[type=search]{flex:1;width:auto}
+.ibtn{background:var(--card);border:1px solid var(--line);border-radius:12px;min-height:48px;min-width:48px;padding:0 14px}
+.primary{background:var(--accent);color:#fff;border-color:transparent;font-weight:600}
+.mt{margin-top:8px}
+.seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{flex:1;border:0;background:none;padding:11px 12px;min-height:46px}
+.seg button.on{background:var(--accent);color:#fff;font-weight:600}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:8px 0 2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:9px 14px;font-size:14px;min-height:40px}
+.chip.on{background:var(--accent);color:#fff;border-color:transparent}
+.list{max-width:900px;margin:0 auto;padding:0 12px}
+.ghead{position:sticky;top:var(--hh,190px);z-index:5;display:flex;align-items:center;gap:10px;background:var(--bg);padding:12px 2px 8px;font-weight:700;cursor:pointer}
+.ghead .prog{margin-left:auto;font-weight:500;font-size:13px;color:var(--mute)}
+.gbar{height:5px;background:var(--line);border-radius:9px;overflow:hidden;margin-bottom:6px}
+.gbar i{display:block;height:100%;background:var(--accent);transition:width .2s}
+.item{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px 14px;margin-bottom:8px;box-shadow:var(--shadow)}
+.item .nm{flex:1;min-width:0}
+.item .nm b{font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis}
+.item .why{font-size:13px;color:var(--mute);background:none;border:0;padding:4px 0;text-align:left;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st{min-width:120px;min-height:54px;border-radius:12px;border:0;font-weight:700;font-size:15px;background:var(--none);color:var(--mute)}
+.st.presencial{background:var(--pres);color:#fff}.st.zoom{background:var(--zoom);color:#fff}.st.ausente{background:var(--aus);color:#fff}
+.foot{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--card);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));box-shadow:0 -4px 16px rgba(0,0,0,.08)}
+.foot .in{max-width:900px;margin:0 auto;display:flex;gap:10px;align-items:center}
+.cnt{display:flex;gap:9px;flex:1;font-size:11px;flex-wrap:nowrap;min-width:0}
+.cnt b{font-size:18px;display:block;line-height:1.1}
+.cnt span{color:var(--mute)}
+.cnt .p b{color:var(--pres)}.cnt .z b{color:var(--zoom)}.cnt .a b{color:var(--aus)}.cnt .v b{color:var(--vis)}
+.fin{min-height:52px;padding:0 14px;white-space:nowrap}
+.ov{position:fixed;inset:0;z-index:50;background:rgba(10,14,20,.55);display:none;align-items:flex-end;justify-content:center}
+.ov.show{display:flex}
+.sheet{background:var(--card);width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));max-height:90vh;overflow:auto}
+@media(min-width:640px){.ov{align-items:center}.sheet{border-radius:20px}}
+.sheet h3{margin:0 0 4px}.sheet p{color:var(--mute);margin:4px 0 12px}
+.lab{display:flex;align-items:center;gap:10px;margin:12px 0;min-height:44px}
+.lab input{width:22px;height:22px}
+.snack{position:fixed;left:12px;right:12px;bottom:calc(100px + env(safe-area-inset-bottom,0px));z-index:40;max-width:520px;margin:0 auto;background:#1c2430;color:#fff;border-radius:12px;padding:8px 8px 8px 14px;display:none;align-items:center;gap:6px}
+.snack.show{display:flex}.snack span{flex:1;font-size:14px}.snack button{background:none;border:0;color:#9db0ff;font-weight:700;padding:10px 8px}
+.empty{color:var(--mute);text-align:center;padding:30px 0}
+.gate{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px}
+.gate .box{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px;max-width:380px;width:100%;box-shadow:var(--shadow)}
+.gate h2{margin:0 0 6px}.gate .em{color:var(--mute);font-size:14px;margin-bottom:16px;word-break:break-all}
+.err{color:var(--aus);font-size:14px;min-height:20px;margin-top:8px}
+.small{font-size:12px;color:var(--mute)}
+/* painel */
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
+.card h2{font-size:16px;margin:0 0 12px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi .n{font-size:28px;font-weight:700;letter-spacing:-.5px}.kpi .l{color:var(--mute);font-size:13px}.kpi .d{font-size:12px;color:var(--mute);margin-top:2px}
+.grid2{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:12px}
+@media(max-width:800px){.grid2{grid-template-columns:1fr}}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:8px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.chart{width:100%;height:auto;display:block}.chart text{fill:var(--mute);font-size:11px}
+.alert{display:flex;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)}
+.alert:last-child{border:0}.alert small{color:var(--mute);display:block}
+.bdg{background:color-mix(in srgb,var(--aus) 15%,transparent);color:var(--aus);border-radius:99px;padding:2px 10px;font-weight:600;font-size:13px;white-space:nowrap;align-self:center}
+.groups{width:100%;border-collapse:collapse;font-size:14px}
+.groups th{text-align:left;color:var(--mute);font-weight:500;font-size:12px}
+.groups td,.groups th{padding:7px 4px;border-bottom:1px solid var(--line)}
+.pbar{height:7px;background:var(--line);border-radius:9px;overflow:hidden;min-width:60px}.pbar i{display:block;height:100%;background:var(--pres)}
+.matrix-wrap{overflow:auto;max-height:560px;margin-top:12px}
+table.m{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
+.m th,.m td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap;background:var(--card)}
+.m thead th{position:sticky;top:0;z-index:2;color:var(--mute);font-weight:500;font-size:12px}
+.m .name{position:sticky;left:0;text-align:left;z-index:1;min-width:170px;border-right:1px solid var(--line)}
+.m thead .name{z-index:3}.m .name small{color:var(--mute);margin-left:6px}
+.c{display:inline-flex;width:22px;height:22px;border-radius:7px;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700}
+.c.presencial{background:var(--pres)}.c.zoom{background:var(--zoom)}.c.ausente{background:var(--aus)}.c.none{background:var(--none);color:var(--mute)}
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate"><div class="box">
+  <h2>Chamada da Reunião</h2>
+  <div class="em">Acesso restrito a <b id="allowed"></b></div>
+  <div id="gbtn"></div>
+  <div id="pinbox">
+    <p id="pinmsg" style="margin:0 0 8px"></p>
+    <input type="text" id="pin" inputmode="numeric" autocomplete="off" placeholder="PIN" style="-webkit-text-security:disc;text-align:center;font-size:22px;letter-spacing:6px">
+    <button class="ibtn primary mt" id="pinok" style="width:100%">Entrar</button>
+    <div class="err" id="err"></div>
+  </div>
+  <div class="small" id="gnote" style="margin-top:12px"></div>
+</div></div>
+
+<div class="top" id="top">
+  <div class="row">
+    <div class="title" id="ttl" data-act="editCong" title="Toque para trocar o nome" style="cursor:pointer">Chamada</div>
+    <div class="badge" id="sync"></div>
+    <button class="ibtn" id="theme" title="Tema">🌓</button>
+  </div>
+  <div class="seg mt" id="tabs"><button data-act="tab" data-v="chamada" class="on">Chamada</button><button data-act="tab" data-v="painel">Painel</button></div>
+  <div id="chamadaBar">
+    <div class="row mt"><select id="msel"></select><button class="ibtn primary" data-act="newMeeting" style="white-space:nowrap;padding:0 12px">＋ Nova</button></div>
+    <div class="row mt"><input type="search" id="q" placeholder="Buscar irmão…"></div>
+    <div class="chips" id="chips"></div>
+  </div>
+</div>
+
+<div class="list" id="list"></div>
+<div class="list" id="dash" style="display:none;padding-top:12px"></div>
+
+<div class="snack" id="snack"><span id="snackt"></span><button id="snackFam" data-act="applyFam" style="display:none"></button><button id="snackUndo" data-act="undo">Desfazer</button></div>
+
+<div class="foot" id="foot"><div class="in">
+  <div class="cnt" id="cnt"></div>
+  <button class="ibtn primary fin" data-act="finish" id="finbtn">Finalizar</button>
+</div></div>
+
+<div class="ov" id="ov"><div class="sheet" id="sheet"></div></div>
+<input type="file" id="csvfile" accept=".csv,.txt,text/csv" style="display:none">
+
+<script>
+/* ============ CONFIGURAÇÃO ============ */
+const CFG = {
+  allowedEmail: 'solioliveiratj@gmail.com',
+  googleClientId: '',   // Client ID do Google (OAuth, tipo Web). Vazio = só PIN.
+  syncUrl: '',          // endpoint do seu banco (recebe POST JSON). Vazio = salva só no aparelho.
+  syncHeaders: {}       // ex.: {Authorization:'Bearer ...'}
+};
+const REASONS = {
+  zoom:['Doente','Viagem','Trabalho','Idoso / locomoção','Sem transporte','Cuidando de familiar'],
+  ausente:['Doente','Trabalho','Plantão','Viagem','Cuidando de familiar','Sem contato']
+};
+/* DB inicial (exemplo). Troque pelos seus dados. */
+const DB = {"congregationName": "Congregação das Testemunhas de Jeová", "publishers": [{"id": "pub-g1-01", "name": "Geovane Maioto", "group": 1, "active": true, "familyName": "Família Maioto"}, {"id": "pub-g1-02", "name": "Vagner Carvalho", "group": 1, "active": true, "familyName": "Família Carvalho"}, {"id": "pub-g1-03", "name": "Alessandra Maioto", "group": 1, "active": true, "familyName": "Família Maioto"}, {"id": "pub-g1-04", "name": "Anita Carvalho", "group": 1, "active": true, "familyName": "Família Carvalho"}, {"id": "pub-g1-05", "name": "Adriano Meira", "group": 1, "active": true, "familyName": "Família Meira"}, {"id": "pub-g1-06", "name": "Dirceu Silva", "group": 1, "active": true, "familyName": "Família Silva"}, {"id": "pub-g1-07", "name": "Flavia Meira", "group": 1, "active": true, "familyName": "Família Meira"}, {"id": "pub-g1-08", "name": "Joceli Rosa", "group": 1, "active": true, "familyName": "Família Rosa"}, {"id": "pub-g1-09", "name": "Juveniane Andrade", "group": 1, "active": true}, {"id": "pub-g1-10", "name": "Leonardo Carvalho", "group": 1, "active": true, "familyName": "Família Carvalho"}, {"id": "pub-g1-11", "name": "Luciane Carvalho", "group": 1, "active": true, "familyName": "Família Carvalho"}, {"id": "pub-g1-12", "name": "Maria de Fátima", "group": 1, "active": true}, {"id": "pub-g1-13", "name": "Maria Lourdes Silva", "group": 1, "active": true, "familyName": "Família Silva"}, {"id": "pub-g1-14", "name": "Nirleide Silva", "group": 1, "active": true, "familyName": "Família Silva"}, {"id": "pub-g1-15", "name": "Noêmia Silva", "group": 1, "active": true, "familyName": "Família Silva"}, {"id": "pub-g1-16", "name": "Vânia Romero", "group": 1, "active": true}, {"id": "pub-g2-01", "name": "Zilney Silva", "group": 2, "active": true, "familyName": "Família Silva"}, {"id": "pub-g2-02", "name": "Alex Antoniassi", "group": 2, "active": true}, {"id": "pub-g2-03", "name": "Claudenice Chalega", "group": 2, "active": true}, {"id": "pub-g2-04", "name": "Donizeti Martins", "group": 2, "active": true, "familyName": "Família Martins"}, {"id": "pub-g2-05", "name": "Ilde Carla", "group": 2, "active": true}, {"id": "pub-g2-06", "name": "Liliane C. Silva", "group": 2, "active": true, "familyName": "Família Silva"}, {"id": "pub-g2-07", "name": "Lucia Meira", "group": 2, "active": true, "familyName": "Família Meira"}, {"id": "pub-g2-08", "name": "Maria da Graça", "group": 2, "active": true}, {"id": "pub-g2-09", "name": "Marlene Martins", "group": 2, "active": true, "familyName": "Família Martins"}, {"id": "pub-g2-10", "name": "Nadir Lima", "group": 2, "active": true}, {"id": "pub-g2-11", "name": "Raimunda G. Freitas", "group": 2, "active": true}, {"id": "pub-g2-12", "name": "Robson Marinho", "group": 2, "active": true}, {"id": "pub-g2-13", "name": "Samuel Sousa", "group": 2, "active": true, "familyName": "Família Sousa"}, {"id": "pub-g2-14", "name": "Sandra Silva", "group": 2, "active": true, "familyName": "Família Silva"}, {"id": "pub-g2-15", "name": "Yasmin Sousa", "group": 2, "active": true, "familyName": "Família Sousa"}, {"id": "pub-g2-16", "name": "Marinete Souza", "group": 2, "active": true}, {"id": "pub-g3-01", "name": "Deivison Sangregorio", "group": 3, "active": true, "familyName": "Família Sangregorio"}, {"id": "pub-g3-02", "name": "Adriano Ferreira", "group": 3, "active": true, "familyName": "Família Ferreira"}, {"id": "pub-g3-03", "name": "Domenica Anjos", "group": 3, "active": true}, {"id": "pub-g3-04", "name": "Ingrid F. Neres", "group": 3, "active": true}, {"id": "pub-g3-05", "name": "Jessica Silva", "group": 3, "active": true}, {"id": "pub-g3-06", "name": "Leda Balabem", "group": 3, "active": true}, {"id": "pub-g3-07", "name": "Lethycia Anjos", "group": 3, "active": true}, {"id": "pub-g3-08", "name": "Lucimeire Vieira", "group": 3, "active": true}, {"id": "pub-g3-09", "name": "Marli Stanisci", "group": 3, "active": true}, {"id": "pub-g3-10", "name": "Robson Neres", "group": 3, "active": true}, {"id": "pub-g3-11", "name": "Sara Sangregorio", "group": 3, "active": true}, {"id": "pub-g3-12", "name": "Thais Martins", "group": 3, "active": true}, {"id": "pub-g3-13", "name": "Vanessa Costa", "group": 3, "active": true}, {"id": "pub-g3-14", "name": "Washington Luis M.", "group": 3, "active": true}, {"id": "pub-g3-15", "name": "José Nildo", "group": 3, "active": true}, {"id": "pub-g3-16", "name": "Marcelo Veloso", "group": 3, "active": true}, {"id": "pub-g3-17", "name": "Simeia Belmiro", "group": 3, "active": true}, {"id": "pub-g3-18", "name": "Conceição Belmiro", "group": 3, "active": true}, {"id": "pub-g3-19", "name": "Maria A. Belmiro", "group": 3, "active": true}, {"id": "pub-g4-01", "name": "Gilvanildo Miranda", "group": 4, "active": true, "familyName": "Família Miranda"}, {"id": "pub-g4-02", "name": "Solimar Oliveira", "group": 4, "active": true, "familyName": "Família Oliveira"}, {"id": "pub-g4-03", "name": "Arlete Miranda", "group": 4, "active": true}, {"id": "pub-g4-04", "name": "Bernardo Vieira", "group": 4, "active": true}, {"id": "pub-g4-05", "name": "David Vieira", "group": 4, "active": true}, {"id": "pub-g4-06", "name": "Ednor", "group": 4, "active": true}, {"id": "pub-g4-07", "name": "Gely Dias", "group": 4, "active": true}, {"id": "pub-g4-08", "name": "Hellen Vieira", "group": 4, "active": true}, {"id": "pub-g4-09", "name": "Julia Vieira", "group": 4, "active": true}, {"id": "pub-g4-10", "name": "Liliane Freire", "group": 4, "active": true}, {"id": "pub-g4-11", "name": "Luzia Moraes", "group": 4, "active": true}, {"id": "pub-g4-12", "name": "Marinalva Cavalcante", "group": 4, "active": true}, {"id": "pub-g4-13", "name": "Paulo Freire", "group": 4, "active": true}, {"id": "pub-g4-14", "name": "Rodrigo Dias", "group": 4, "active": true}, {"id": "pub-g4-15", "name": "Rodrigo Miranda", "group": 4, "active": true}, {"id": "pub-g4-16", "name": "Stelle Oliveira", "group": 4, "active": true}, {"id": "pub-g4-17", "name": "Matheus Oliveira", "group": 4, "active": true}, {"id": "pub-g4-18", "name": "Renata Lopes", "group": 4, "active": true}, {"id": "pub-g5-01", "name": "Juraci Rosa", "group": 5, "active": true, "familyName": "Família Rosa"}, {"id": "pub-g5-02", "name": "Luiz Henrique V.", "group": 5, "active": true}, {"id": "pub-g5-03", "name": "Ana Beatriz", "group": 5, "active": true}, {"id": "pub-g5-04", "name": "Arthur Duarte", "group": 5, "active": true}, {"id": "pub-g5-05", "name": "Carlos R. Junior", "group": 5, "active": true}, {"id": "pub-g5-06", "name": "Edneide Maria", "group": 5, "active": true}, {"id": "pub-g5-07", "name": "Fabiana Mendes", "group": 5, "active": true}, {"id": "pub-g5-08", "name": "Gabriel Pimenta", "group": 5, "active": true}, {"id": "pub-g5-09", "name": "Irandi Lima", "group": 5, "active": true}, {"id": "pub-g5-10", "name": "Juan Duarte", "group": 5, "active": true}, {"id": "pub-g5-11", "name": "Pâmela Peres", "group": 5, "active": true}, {"id": "pub-g5-12", "name": "Roberia Rosa", "group": 5, "active": true}, {"id": "pub-g5-13", "name": "Rute Duarte", "group": 5, "active": true}, {"id": "pub-g5-14", "name": "Thamires Almeida", "group": 5, "active": true}, {"id": "pub-g5-15", "name": "Diego Tiburcio", "group": 5, "active": true}, {"id": "pub-g5-16", "name": "Camila Tiburcio", "group": 5, "active": true}, {"id": "pub-g5-17", "name": "Karina Tiburcio", "group": 5, "active": true}, {"id": "pub-g5-18", "name": "Gustavo Tiburcio", "group": 5, "active": true}, {"id": "pub-g6-01", "name": "Roberto Dornella (Tati)", "group": 6, "active": true, "familyName": "Família Dornella"}, {"id": "pub-g6-02", "name": "Alvanir Almeida", "group": 6, "active": true, "familyName": "Família Almeida"}, {"id": "pub-g6-03", "name": "Benedito Joaquim", "group": 6, "active": true}, {"id": "pub-g6-04", "name": "Cássia Dornella", "group": 6, "active": true}, {"id": "pub-g6-05", "name": "Felipe Santana", "group": 6, "active": true}, {"id": "pub-g6-06", "name": "João Santana", "group": 6, "active": true}, {"id": "pub-g6-07", "name": "Maria Madalena", "group": 6, "active": true}, {"id": "pub-g6-08", "name": "Maria Piedade", "group": 6, "active": true}, {"id": "pub-g6-09", "name": "Maria Safira", "group": 6, "active": true}, {"id": "pub-g6-10", "name": "Miguel Almeida", "group": 6, "active": true}, {"id": "pub-g6-11", "name": "Rosana Santana", "group": 6, "active": true}, {"id": "pub-g6-12", "name": "Viviane Oliveira", "group": 6, "active": true}, {"id": "pub-g6-13", "name": "Simone Martim", "group": 6, "active": true}, {"id": "pub-g6-14", "name": "Nilza Oliveira", "group": 6, "active": true}, {"id": "pub-g6-15", "name": "Marcos de Lima", "group": 6, "active": true}, {"id": "pub-g6-16", "name": "Joyce de Lima", "group": 6, "active": true}, {"id": "pub-g6-17", "name": "Dario Silverio", "group": 6, "active": true}, {"id": "pub-g6-18", "name": "Julia Silverio", "group": 6, "active": true}, {"id": "pub-g6-19", "name": "Maria Maroli", "group": 6, "active": true}, {"id": "pub-g6-20", "name": "Darilene Sampaio", "group": 6, "active": true}], "meetings": [{"id": "meet-sabado-12", "type": "weekend", "date": "2026-09-12", "dayOfWeek": "Sábado", "titleOrTheme": "Discurso Público e Estudo de A Sentinela"}, {"id": "meet-terca-08", "type": "midweek", "date": "2026-09-08", "dayOfWeek": "Terça-feira", "titleOrTheme": "Nossa Vida e Ministério Cristão: Faça o Seu Melhor no Ministério"}, {"id": "meet-sabado-05", "type": "weekend", "date": "2026-09-05", "dayOfWeek": "Sábado", "titleOrTheme": "Discurso Público e Estudo de A Sentinela"}, {"id": "meet-terca-01", "type": "midweek", "date": "2026-09-01", "dayOfWeek": "Terça-feira", "titleOrTheme": "Nossa Vida e Ministério Cristão"}, {"id": "meet-01", "type": "midweek", "date": "2026-09-02", "dayOfWeek": "Quarta-feira", "titleOrTheme": "Nossa Vida e Ministério Cristão"}, {"id": "meet-02", "type": "weekend", "date": "2026-09-06", "dayOfWeek": "Domingo", "titleOrTheme": "Discurso Público e Estudo de A Sentinela"}, {"id": "meet-03", "type": "midweek", "date": "2026-09-09", "dayOfWeek": "Quarta-feira", "titleOrTheme": "Nossa Vida e Ministério Cristão: Faça o Seu Melhor no Ministério"}], "attendance": {"meet-01": {"pub-g1-01": "presencial", "pub-g1-02": "presencial", "pub-g1-03": "presencial", "pub-g1-04": "presencial", "pub-g1-05": "presencial", "pub-g1-06": "presencial", "pub-g1-07": "presencial", "pub-g1-08": "zoom", "pub-g1-09": "presencial", "pub-g1-10": "presencial", "pub-g1-11": "presencial", "pub-g1-12": "presencial", "pub-g1-13": "presencial", "pub-g1-14": "presencial", "pub-g1-15": "presencial", "pub-g1-16": "zoom", "pub-g2-01": "presencial", "pub-g2-02": "presencial", "pub-g2-03": "presencial", "pub-g2-04": "presencial", "pub-g2-05": "zoom", "pub-g2-06": "presencial", "pub-g2-07": "presencial", "pub-g2-08": "presencial", "pub-g2-09": "presencial", "pub-g2-10": "presencial", "pub-g2-11": "presencial", "pub-g2-12": "presencial", "pub-g2-13": "presencial", "pub-g2-14": "presencial", "pub-g2-15": "zoom", "pub-g2-16": "presencial", "pub-g3-01": "presencial", "pub-g3-02": "presencial", "pub-g3-03": "presencial", "pub-g3-04": "presencial", "pub-g3-05": "presencial", "pub-g3-06": "presencial", "pub-g3-07": "presencial", "pub-g3-08": "presencial", "pub-g3-09": "presencial", "pub-g3-10": "presencial", "pub-g3-11": "presencial", "pub-g3-12": "presencial", "pub-g3-13": "presencial", "pub-g3-14": "presencial", "pub-g3-15": "presencial", "pub-g3-16": "presencial", "pub-g3-17": "presencial", "pub-g3-18": "presencial", "pub-g3-19": "presencial", "pub-g4-01": "presencial", "pub-g4-02": "presencial", "pub-g4-03": "presencial", "pub-g4-04": "presencial", "pub-g4-05": "presencial", "pub-g4-06": "presencial", "pub-g4-07": "presencial", "pub-g4-08": "zoom", "pub-g4-09": "presencial", "pub-g4-10": "presencial", "pub-g4-11": "presencial", "pub-g4-12": "presencial", "pub-g4-13": "presencial", "pub-g4-14": "presencial", "pub-g4-15": "presencial", "pub-g4-16": "presencial", "pub-g4-17": "presencial", "pub-g4-18": "presencial", "pub-g5-01": "presencial", "pub-g5-02": "presencial", "pub-g5-03": "presencial", "pub-g5-04": "presencial", "pub-g5-05": "presencial", "pub-g5-06": "presencial", "pub-g5-07": "presencial", "pub-g5-08": "presencial", "pub-g5-09": "presencial", "pub-g5-10": "presencial", "pub-g5-11": "presencial", "pub-g5-12": "presencial", "pub-g5-13": "presencial", "pub-g5-14": "presencial", "pub-g5-15": "presencial", "pub-g5-16": "presencial", "pub-g5-17": "presencial", "pub-g5-18": "presencial", "pub-g6-01": "presencial", "pub-g6-02": "presencial", "pub-g6-03": "presencial", "pub-g6-04": "presencial", "pub-g6-05": "presencial", "pub-g6-06": "presencial", "pub-g6-07": "presencial", "pub-g6-08": "presencial", "pub-g6-09": "presencial", "pub-g6-10": "presencial", "pub-g6-11": "presencial", "pub-g6-12": "presencial", "pub-g6-13": "presencial", "pub-g6-14": "presencial", "pub-g6-15": "presencial", "pub-g6-16": "presencial", "pub-g6-17": "presencial", "pub-g6-18": "presencial", "pub-g6-19": "presencial", "pub-g6-20": "presencial"}, "meet-02": {"pub-g1-01": "presencial", "pub-g1-02": "presencial", "pub-g1-03": "presencial", "pub-g1-04": "presencial", "pub-g1-05": "presencial", "pub-g1-06": "presencial", "pub-g1-07": "presencial", "pub-g1-08": "presencial", "pub-g1-09": "presencial", "pub-g1-10": "presencial", "pub-g1-11": "presencial", "pub-g1-12": "presencial", "pub-g1-13": "presencial", "pub-g1-14": "presencial", "pub-g1-15": "presencial", "pub-g1-16": "presencial", "pub-g2-01": "presencial", "pub-g2-02": "presencial", "pub-g2-03": "presencial", "pub-g2-04": "presencial", "pub-g2-05": "presencial", "pub-g2-06": "presencial", "pub-g2-07": "presencial", "pub-g2-08": "presencial", "pub-g2-09": "presencial", "pub-g2-10": "presencial", "pub-g2-11": "presencial", "pub-g2-12": "presencial", "pub-g2-13": "presencial", "pub-g2-14": "presencial", "pub-g2-15": "presencial", "pub-g2-16": "presencial", "pub-g3-01": "presencial", "pub-g3-02": "presencial", "pub-g3-03": "presencial", "pub-g3-04": "presencial", "pub-g3-05": "presencial", "pub-g3-06": "presencial", "pub-g3-07": "presencial", "pub-g3-08": "presencial", "pub-g3-09": "presencial", "pub-g3-10": "presencial", "pub-g3-11": "presencial", "pub-g3-12": "presencial", "pub-g3-13": "presencial", "pub-g3-14": "presencial", "pub-g3-15": "presencial", "pub-g3-16": "presencial", "pub-g3-17": "presencial", "pub-g3-18": "presencial", "pub-g3-19": "presencial", "pub-g4-01": "presencial", "pub-g4-02": "presencial", "pub-g4-03": "presencial", "pub-g4-04": "presencial", "pub-g4-05": "presencial", "pub-g4-06": "presencial", "pub-g4-07": "presencial", "pub-g4-08": "presencial", "pub-g4-09": "presencial", "pub-g4-10": "presencial", "pub-g4-11": "presencial", "pub-g4-12": "presencial", "pub-g4-13": "presencial", "pub-g4-14": "presencial", "pub-g4-15": "presencial", "pub-g4-16": "presencial", "pub-g4-17": "presencial", "pub-g4-18": "presencial", "pub-g5-01": "presencial", "pub-g5-02": "presencial", "pub-g5-03": "presencial", "pub-g5-04": "presencial", "pub-g5-05": "presencial", "pub-g5-06": "presencial", "pub-g5-07": "presencial", "pub-g5-08": "presencial", "pub-g5-09": "presencial", "pub-g5-10": "presencial", "pub-g5-11": "presencial", "pub-g5-12": "presencial", "pub-g5-13": "presencial", "pub-g5-14": "presencial", "pub-g5-15": "presencial", "pub-g5-16": "presencial", "pub-g5-17": "presencial", "pub-g5-18": "presencial", "pub-g6-01": "presencial", "pub-g6-02": "presencial", "pub-g6-03": "presencial", "pub-g6-04": "presencial", "pub-g6-05": "presencial", "pub-g6-06": "presencial", "pub-g6-07": "presencial", "pub-g6-08": "presencial", "pub-g6-09": "presencial", "pub-g6-10": "presencial", "pub-g6-11": "presencial", "pub-g6-12": "presencial", "pub-g6-13": "presencial", "pub-g6-14": "presencial", "pub-g6-15": "presencial", "pub-g6-16": "presencial", "pub-g6-17": "presencial", "pub-g6-18": "presencial", "pub-g6-19": "presencial", "pub-g6-20": "presencial"}, "meet-03": {"pub-g1-01": "presencial", "pub-g1-02": "presencial", "pub-g1-03": "presencial", "pub-g1-04": "presencial", "pub-g1-05": "presencial", "pub-g1-06": "presencial", "pub-g1-07": "presencial", "pub-g1-08": "zoom", "pub-g1-09": "presencial", "pub-g1-10": "presencial", "pub-g1-11": "presencial", "pub-g1-12": "presencial", "pub-g1-13": "presencial", "pub-g1-14": "presencial", "pub-g1-15": "presencial", "pub-g1-16": "zoom", "pub-g2-01": "presencial", "pub-g2-02": "presencial", "pub-g2-03": "presencial", "pub-g2-04": "presencial", "pub-g2-05": "zoom", "pub-g2-06": "presencial", "pub-g2-07": "presencial", "pub-g2-08": "presencial", "pub-g2-09": "presencial", "pub-g2-10": "presencial", "pub-g2-11": "presencial", "pub-g2-12": "presencial", "pub-g2-13": "presencial", "pub-g2-14": "presencial", "pub-g2-15": "zoom", "pub-g2-16": "presencial", "pub-g3-01": "presencial", "pub-g3-02": "presencial", "pub-g3-03": "presencial", "pub-g3-04": "presencial", "pub-g3-05": "presencial", "pub-g3-06": "presencial", "pub-g3-07": "presencial", "pub-g3-08": "presencial", "pub-g3-09": "presencial", "pub-g3-10": "presencial", "pub-g3-11": "presencial", "pub-g3-12": "presencial", "pub-g3-13": "presencial", "pub-g3-14": "presencial", "pub-g3-15": "presencial", "pub-g3-16": "presencial", "pub-g3-17": "presencial", "pub-g3-18": "presencial", "pub-g3-19": "presencial", "pub-g4-01": "presencial", "pub-g4-02": "presencial", "pub-g4-03": "presencial", "pub-g4-04": "presencial", "pub-g4-05": "presencial", "pub-g4-06": "presencial", "pub-g4-07": "presencial", "pub-g4-08": "zoom", "pub-g4-09": "presencial", "pub-g4-10": "presencial", "pub-g4-11": "presencial", "pub-g4-12": "presencial", "pub-g4-13": "presencial", "pub-g4-14": "presencial", "pub-g4-15": "presencial", "pub-g4-16": "presencial", "pub-g4-17": "presencial", "pub-g4-18": "presencial", "pub-g5-01": "presencial", "pub-g5-02": "presencial", "pub-g5-03": "presencial", "pub-g5-04": "presencial", "pub-g5-05": "presencial", "pub-g5-06": "presencial", "pub-g5-07": "presencial", "pub-g5-08": "presencial", "pub-g5-09": "presencial", "pub-g5-10": "presencial", "pub-g5-11": "presencial", "pub-g5-12": "presencial", "pub-g5-13": "presencial", "pub-g5-14": "presencial", "pub-g5-15": "presencial", "pub-g5-16": "presencial", "pub-g5-17": "presencial", "pub-g5-18": "presencial", "pub-g6-01": "presencial", "pub-g6-02": "presencial", "pub-g6-03": "presencial", "pub-g6-04": "presencial", "pub-g6-05": "presencial", "pub-g6-06": "presencial", "pub-g6-07": "presencial", "pub-g6-08": "presencial", "pub-g6-09": "presencial", "pub-g6-10": "presencial", "pub-g6-11": "presencial", "pub-g6-12": "presencial", "pub-g6-13": "presencial", "pub-g6-14": "presencial", "pub-g6-15": "presencial", "pub-g6-16": "presencial", "pub-g6-17": "presencial", "pub-g6-18": "presencial", "pub-g6-19": "presencial", "pub-g6-20": "presencial"}, "meet-terca-08": {"pub-g1-01": "presencial", "pub-g1-02": "presencial", "pub-g1-03": "presencial", "pub-g1-04": "presencial", "pub-g1-05": "presencial", "pub-g1-06": "presencial", "pub-g1-07": "presencial", "pub-g1-08": "zoom", "pub-g1-09": "presencial", "pub-g1-10": "presencial", "pub-g1-11": "presencial", "pub-g1-12": "presencial", "pub-g1-13": "presencial", "pub-g1-14": "presencial", "pub-g1-15": "presencial", "pub-g1-16": "zoom", "pub-g2-01": "presencial", "pub-g2-02": "presencial", "pub-g2-03": "presencial", "pub-g2-04": "presencial", "pub-g2-05": "zoom", "pub-g2-06": "presencial", "pub-g2-07": "presencial", "pub-g2-08": "presencial", "pub-g2-09": "presencial", "pub-g2-10": "presencial", "pub-g2-11": "presencial", "pub-g2-12": "presencial", "pub-g2-13": "presencial", "pub-g2-14": "presencial", "pub-g2-15": "zoom", "pub-g2-16": "presencial", "pub-g3-01": "presencial", "pub-g3-02": "presencial", "pub-g3-03": "presencial", "pub-g3-04": "presencial", "pub-g3-05": "presencial", "pub-g3-06": "presencial", "pub-g3-07": "presencial", "pub-g3-08": "presencial", "pub-g3-09": "presencial", "pub-g3-10": "presencial", "pub-g3-11": "presencial", "pub-g3-12": "presencial", "pub-g3-13": "presencial", "pub-g3-14": "presencial", "pub-g3-15": "presencial", "pub-g3-16": "presencial", "pub-g3-17": "presencial", "pub-g3-18": "presencial", "pub-g3-19": "presencial", "pub-g4-01": "presencial", "pub-g4-02": "presencial", "pub-g4-03": "presencial", "pub-g4-04": "presencial", "pub-g4-05": "presencial", "pub-g4-06": "presencial", "pub-g4-07": "presencial", "pub-g4-08": "zoom", "pub-g4-09": "presencial", "pub-g4-10": "presencial", "pub-g4-11": "presencial", "pub-g4-12": "presencial", "pub-g4-13": "presencial", "pub-g4-14": "presencial", "pub-g4-15": "presencial", "pub-g4-16": "presencial", "pub-g4-17": "presencial", "pub-g4-18": "presencial", "pub-g5-01": "presencial", "pub-g5-02": "presencial", "pub-g5-03": "presencial", "pub-g5-04": "presencial", "pub-g5-05": "presencial", "pub-g5-06": "presencial", "pub-g5-07": "presencial", "pub-g5-08": "presencial", "pub-g5-09": "presencial", "pub-g5-10": "presencial", "pub-g5-11": "presencial", "pub-g5-12": "presencial", "pub-g5-13": "presencial", "pub-g5-14": "presencial", "pub-g5-15": "presencial", "pub-g5-16": "presencial", "pub-g5-17": "presencial", "pub-g5-18": "presencial", "pub-g6-01": "presencial", "pub-g6-02": "presencial", "pub-g6-03": "presencial", "pub-g6-04": "presencial", "pub-g6-05": "presencial", "pub-g6-06": "presencial", "pub-g6-07": "presencial", "pub-g6-08": "presencial", "pub-g6-09": "presencial", "pub-g6-10": "presencial", "pub-g6-11": "presencial", "pub-g6-12": "presencial", "pub-g6-13": "presencial", "pub-g6-14": "presencial", "pub-g6-15": "presencial", "pub-g6-16": "presencial", "pub-g6-17": "presencial", "pub-g6-18": "presencial", "pub-g6-19": "presencial", "pub-g6-20": "presencial"}, "meet-sabado-05": {"pub-g1-01": "presencial", "pub-g1-02": "presencial", "pub-g1-03": "presencial", "pub-g1-04": "presencial", "pub-g1-05": "presencial", "pub-g1-06": "presencial", "pub-g1-07": "presencial", "pub-g1-08": "presencial", "pub-g1-09": "presencial", "pub-g1-10": "presencial", "pub-g1-11": "presencial", "pub-g1-12": "presencial", "pub-g1-13": "presencial", "pub-g1-14": "presencial", "pub-g1-15": "presencial", "pub-g1-16": "presencial", "pub-g2-01": "presencial", "pub-g2-02": "presencial", "pub-g2-03": "presencial", "pub-g2-04": "presencial", "pub-g2-05": "presencial", "pub-g2-06": "presencial", "pub-g2-07": "presencial", "pub-g2-08": "presencial", "pub-g2-09": "presencial", "pub-g2-10": "presencial", "pub-g2-11": "presencial", "pub-g2-12": "presencial", "pub-g2-13": "presencial", "pub-g2-14": "presencial", "pub-g2-15": "presencial", "pub-g2-16": "presencial", "pub-g3-01": "presencial", "pub-g3-02": "presencial", "pub-g3-03": "presencial", "pub-g3-04": "presencial", "pub-g3-05": "presencial", "pub-g3-06": "presencial", "pub-g3-07": "presencial", "pub-g3-08": "presencial", "pub-g3-09": "presencial", "pub-g3-10": "presencial", "pub-g3-11": "presencial", "pub-g3-12": "presencial", "pub-g3-13": "presencial", "pub-g3-14": "presencial", "pub-g3-15": "presencial", "pub-g3-16": "presencial", "pub-g3-17": "presencial", "pub-g3-18": "presencial", "pub-g3-19": "presencial", "pub-g4-01": "presencial", "pub-g4-02": "presencial", "pub-g4-03": "presencial", "pub-g4-04": "presencial", "pub-g4-05": "presencial", "pub-g4-06": "presencial", "pub-g4-07": "presencial", "pub-g4-08": "presencial", "pub-g4-09": "presencial", "pub-g4-10": "presencial", "pub-g4-11": "presencial", "pub-g4-12": "presencial", "pub-g4-13": "presencial", "pub-g4-14": "presencial", "pub-g4-15": "presencial", "pub-g4-16": "presencial", "pub-g4-17": "presencial", "pub-g4-18": "presencial", "pub-g5-01": "presencial", "pub-g5-02": "presencial", "pub-g5-03": "presencial", "pub-g5-04": "presencial", "pub-g5-05": "presencial", "pub-g5-06": "presencial", "pub-g5-07": "presencial", "pub-g5-08": "presencial", "pub-g5-09": "presencial", "pub-g5-10": "presencial", "pub-g5-11": "presencial", "pub-g5-12": "presencial", "pub-g5-13": "presencial", "pub-g5-14": "presencial", "pub-g5-15": "presencial", "pub-g5-16": "presencial", "pub-g5-17": "presencial", "pub-g5-18": "presencial", "pub-g6-01": "presencial", "pub-g6-02": "presencial", "pub-g6-03": "presencial", "pub-g6-04": "presencial", "pub-g6-05": "presencial", "pub-g6-06": "presencial", "pub-g6-07": "presencial", "pub-g6-08": "presencial", "pub-g6-09": "presencial", "pub-g6-10": "presencial", "pub-g6-11": "presencial", "pub-g6-12": "presencial", "pub-g6-13": "presencial", "pub-g6-14": "presencial", "pub-g6-15": "presencial", "pub-g6-16": "presencial", "pub-g6-17": "presencial", "pub-g6-18": "presencial", "pub-g6-19": "presencial", "pub-g6-20": "presencial"}, "meet-sabado-12": {"pub-g1-01": "presencial", "pub-g1-02": "presencial", "pub-g1-03": "presencial", "pub-g1-04": "presencial", "pub-g1-05": "presencial", "pub-g1-06": "presencial", "pub-g1-07": "presencial", "pub-g1-08": "presencial", "pub-g1-09": "presencial", "pub-g1-10": "presencial", "pub-g1-11": "presencial", "pub-g1-12": "presencial", "pub-g1-13": "presencial", "pub-g1-14": "presencial", "pub-g1-15": "presencial", "pub-g1-16": "presencial", "pub-g2-01": "presencial", "pub-g2-02": "presencial", "pub-g2-03": "presencial", "pub-g2-04": "presencial", "pub-g2-05": "presencial", "pub-g2-06": "presencial", "pub-g2-07": "presencial", "pub-g2-08": "presencial", "pub-g2-09": "presencial", "pub-g2-10": "presencial", "pub-g2-11": "presencial", "pub-g2-12": "presencial", "pub-g2-13": "presencial", "pub-g2-14": "presencial", "pub-g2-15": "presencial", "pub-g2-16": "presencial", "pub-g3-01": "presencial", "pub-g3-02": "presencial", "pub-g3-03": "presencial", "pub-g3-04": "presencial", "pub-g3-05": "presencial", "pub-g3-06": "presencial", "pub-g3-07": "presencial", "pub-g3-08": "presencial", "pub-g3-09": "presencial", "pub-g3-10": "presencial", "pub-g3-11": "presencial", "pub-g3-12": "presencial", "pub-g3-13": "presencial", "pub-g3-14": "presencial", "pub-g3-15": "presencial", "pub-g3-16": "presencial", "pub-g3-17": "presencial", "pub-g3-18": "presencial", "pub-g3-19": "presencial", "pub-g4-01": "presencial", "pub-g4-02": "presencial", "pub-g4-03": "presencial", "pub-g4-04": "presencial", "pub-g4-05": "presencial", "pub-g4-06": "presencial", "pub-g4-07": "presencial", "pub-g4-08": "presencial", "pub-g4-09": "presencial", "pub-g4-10": "presencial", "pub-g4-11": "presencial", "pub-g4-12": "presencial", "pub-g4-13": "presencial", "pub-g4-14": "presencial", "pub-g4-15": "presencial", "pub-g4-16": "presencial", "pub-g4-17": "presencial", "pub-g4-18": "presencial", "pub-g5-01": "presencial", "pub-g5-02": "presencial", "pub-g5-03": "presencial", "pub-g5-04": "presencial", "pub-g5-05": "presencial", "pub-g5-06": "presencial", "pub-g5-07": "presencial", "pub-g5-08": "presencial", "pub-g5-09": "presencial", "pub-g5-10": "presencial", "pub-g5-11": "presencial", "pub-g5-12": "presencial", "pub-g5-13": "presencial", "pub-g5-14": "presencial", "pub-g5-15": "presencial", "pub-g5-16": "presencial", "pub-g5-17": "presencial", "pub-g5-18": "presencial", "pub-g6-01": "presencial", "pub-g6-02": "presencial", "pub-g6-03": "presencial", "pub-g6-04": "presencial", "pub-g6-05": "presencial", "pub-g6-06": "presencial", "pub-g6-07": "presencial", "pub-g6-08": "presencial", "pub-g6-09": "presencial", "pub-g6-10": "presencial", "pub-g6-11": "presencial", "pub-g6-12": "presencial", "pub-g6-13": "presencial", "pub-g6-14": "presencial", "pub-g6-15": "presencial", "pub-g6-16": "presencial", "pub-g6-17": "presencial", "pub-g6-18": "presencial", "pub-g6-19": "presencial", "pub-g6-20": "presencial"}}, "attendanceNotes": {"meet-01": {"pub-g1-08": "Idosa, dificuldade de locomoção", "pub-g1-16": "Turno de plantão no hospital", "pub-g2-05": "Sintomas gripais", "pub-g2-15": "Cuidando de familiar idoso", "pub-g4-08": "Trabalho até mais tarde"}, "meet-03": {"pub-g1-08": "Idosa, assistindo pelo Zoom", "pub-g1-16": "Plantão no trabalho", "pub-g2-05": "Recuperando de gripe", "pub-g2-15": "Cuidando de familiar", "pub-g4-08": "Viagem a trabalho"}, "meet-terca-08": {"pub-g1-08": "Idosa, assistindo pelo Zoom", "pub-g1-16": "Plantão no trabalho", "pub-g2-05": "Recuperando de gripe", "pub-g2-15": "Cuidando de familiar", "pub-g4-08": "Viagem a trabalho"}, "meet-sabado-05": {"pub-g1-08": "Idosa, dificuldade de locomoção", "pub-g1-16": "Turno de plantão no hospital", "pub-g2-05": "Sintomas gripais", "pub-g2-15": "Cuidando de familiar idoso", "pub-g4-08": "Trabalho até mais tarde"}}};
+
+/* ============ UTIL ============ */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=d=>{const[y,m,dd]=d.split('-');return dd+'/'+m};
+const LBL={presencial:'Presencial',zoom:'Zoom',ausente:'Ausente'};
+const NEXT={null:'presencial',presencial:'zoom',zoom:'ausente',ausente:null};
+const TYPE={midweek:'Meio de semana',weekend:'Fim de semana'};
+const KEY='chamada.v1';
+const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const buzz=()=>{try{navigator.vibrate&&navigator.vibrate(15)}catch(e){}};
+
+/* ============ ESTADO (salvo no aparelho) ============ */
+let S;
+try{S=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){S=null}
+if(!S){
+  S={meetings:DB.meetings.slice(),attendance:JSON.parse(JSON.stringify(DB.attendance)),notes:JSON.parse(JSON.stringify(DB.attendanceNotes||{})),
+     finalized:Object.fromEntries(DB.meetings.map(m=>[m.id,true])),cur:null};
+}
+S.visitors=S.visitors||{};S.opQueue=S.opQueue||[];S.dev=S.dev||('d-'+Math.random().toString(36).slice(2,8));
+if(!S.publishers)S.publishers=JSON.parse(JSON.stringify(DB.publishers));
+/* migração da versão anterior (filas antigas) */
+if(S.pending||S.pubQueue){
+  (S.pending||[]).forEach(mid=>{const m=S.meetings.find(x=>x.id===mid);if(m)S.opQueue.push({t:'meeting',meeting:m,ts:Date.now()});
+    Object.entries(S.attendance[mid]||{}).forEach(([pid,st])=>S.opQueue.push({t:'mark',mid,pid,st,note:(S.notes[mid]||{})[pid]||'',ts:Date.now()}))});
+  (S.pubQueue||[]).forEach(it=>S.opQueue.push({t:'pub',op:it.op,publisher:it.publisher,ts:Date.now()}));
+  delete S.pending;delete S.pubQueue;
+}
+function sorted(){return S.meetings.slice().sort((a,b)=>b.date.localeCompare(a.date))}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+if(!S.cur||!S.meetings.find(m=>m.id===S.cur)) S.cur=sorted()[0]?.id||null;
+const cur=()=>S.meetings.find(m=>m.id===S.cur);
+let pubs=[];function refreshPubs(){pubs=S.publishers.filter(p=>p.active!==false)}
+refreshPubs();
+const groupsList=()=>[...new Set(S.publishers.map(p=>p.group))].sort((a,b)=>a-b);
+const att=()=>(S.attendance[S.cur]=S.attendance[S.cur]||{});
+const nts=()=>(S.notes[S.cur]=S.notes[S.cur]||{});
+const UI={q:'',unmarked:false,collapsed:{},view:'chamada'};
+let undoStack=[],snackFam=null,deferredInstall=null,pendingImport=null;
+
+/* ============ FILA DE SINCRONIZAÇÃO (só o que mudou) ============ */
+function opKey(o){
+  if(o.t==='mark')return 'm|'+o.mid+'|'+o.pid;
+  if(o.t==='visitors')return 'v|'+o.mid;
+  if(o.t==='final')return 'f|'+o.mid;
+  if(o.t==='pub')return 'p|'+o.publisher.id;
+  if(o.t==='congregation')return 'c|';
+  return null;
+}
+function queueOp(op){
+  op.ts=Date.now();
+  if(!flush.busy){const k=opKey(op);if(k)S.opQueue=S.opQueue.filter(o=>opKey(o)!==k)}
+  S.opQueue.push(op);save();scheduleFlush();
+}
+let ft;function scheduleFlush(){clearTimeout(ft);ft=setTimeout(flush,1200);badge()}
+async function flush(){
+  if(!CFG.syncUrl||!navigator.onLine||flush.busy){badge();return}
+  flush.busy=true;
+  try{
+    while(S.opQueue.length){
+      const batch=S.opQueue.slice(0,50);
+      const r=await fetch(CFG.syncUrl,{method:'POST',headers:{'Content-Type':'application/json',...CFG.syncHeaders},
+        body:JSON.stringify({type:'ops',by:CFG.allowedEmail,device:S.dev,ops:batch})});
+      if(!r.ok)throw 0;
+      S.opQueue.splice(0,batch.length);save();
+    }
+  }catch(e){}
+  flush.busy=false;badge();
+}
+flush.busy=false;
+function badge(){
+  const n=S.opQueue.length,b=$('sync');
+  if(!CFG.syncUrl)b.textContent='💾 Salvo';
+  else if(!navigator.onLine)b.textContent='📴 Offline'+(n?' · '+n+' pendente':'');
+  else b.textContent=n?'⏳ '+n+' pendente':'✓ Sincronizado';
+}
+addEventListener('online',flush);addEventListener('offline',badge);
+
+/* ============ MARCAÇÕES ============ */
+function pushUndo(entries){undoStack.push({mid:S.cur,entries});undoStack=undoStack.slice(-30)}
+function applyMark(pid,st,note){
+  const a=att(),n=nts();
+  if(st)a[pid]=st;else delete a[pid];
+  if(note!==undefined){if(note)n[pid]=note;else delete n[pid]}
+  if(st!=='zoom'&&st!=='ausente')delete n[pid];
+  queueOp({t:'mark',mid:S.cur,pid,st:st||null,note:n[pid]||''});
+}
+function setStatus(pid,st,note,silent){
+  if(!silent)pushUndo([{pid,st:att()[pid]||null,note:nts()[pid]||''}]);
+  applyMark(pid,st,note);
+}
+function bulk(list){ // [{pid,st,note?}] -> um único "desfazer"
+  const a=att(),n=nts(),ent=[],todo=[];
+  list.forEach(x=>{if((a[x.pid]||null)!==x.st){ent.push({pid:x.pid,st:a[x.pid]||null,note:n[x.pid]||''});todo.push(x)}});
+  if(!ent.length)return 0;
+  pushUndo(ent);todo.forEach(x=>applyMark(x.pid,x.st,x.note));return todo.length;
+}
+function guard(){
+  if(!S.finalized[S.cur])return true;
+  sheet('<h3>Chamada finalizada</h3><p>Esta chamada já foi fechada. Para alterar, reabra primeiro.</p><div class="row"><button class="ibtn" style="flex:1" data-act="closeSheet">Cancelar</button><button class="ibtn primary" style="flex:1" data-act="reopen">Reabrir</button></div>');
+  return false;
+}
+function counts(){
+  const a=att();let p=0,z=0,au=0;
+  pubs.forEach(x=>{const s=a[x.id];if(s==='presencial')p++;else if(s==='zoom')z++;else if(s==='ausente')au++});
+  const vis=S.visitors[S.cur]||0;
+  return{p,z,au,vis,n:pubs.length-p-z-au,total:pubs.length,assist:p+z+vis};
+}
+const famMembers=p=>p.familyName&&p.familyName.trim()?pubs.filter(x=>x.id!==p.id&&x.familyName&&x.familyName.trim().toLowerCase()===p.familyName.trim().toLowerCase()):[];
+
+/* ============ RENDER (CHAMADA) ============ */
+function render(){
+  badge();
+  $('ttl').textContent=S.congName||DB.congregationName||'Chamada';
+  if(UI.view==='painel'){renderDash();return}
+  const m=cur(),c=counts();
+  $('msel').innerHTML=sorted().map(x=>'<option value="'+x.id+'"'+(x.id===S.cur?' selected':'')+'>'+fmt(x.date)+' · '+TYPE[x.type]+(S.finalized[x.id]?' ✓':'')+'</option>').join('')||'<option>Nenhuma reunião</option>';
+  $('chips').innerHTML=
+    '<button class="chip'+(UI.unmarked?' on':'')+'" data-act="fUnmarked">Só não marcados ('+c.n+')</button>'+
+    '<button class="chip" data-act="managePubs">👥 Irmãos</button>'+
+    '<button class="chip" data-act="editCong">🏛 Nome da congregação</button>'+
+    '<button class="chip" data-act="allPres">Todos presencial</button>'+
+    '<button class="chip" data-act="copyPrev">Copiar chamada anterior</button>'+
+    '<button class="chip" data-act="summary">Copiar resumo</button>'+
+    '<button class="chip" data-act="exportSheet">Exportar / importar</button>'+
+    (deferredInstall?'<button class="chip" data-act="install">📲 Instalar app</button>':'')+
+    '<button class="chip" data-act="lock">Bloquear</button>';
+  $('cnt').innerHTML='<div class="p"><b>'+c.p+'</b><span>Pres.</span></div><div class="z"><b>'+c.z+'</b><span>Zoom</span></div><div class="v"><b>'+c.vis+'</b><span>Visit.</span></div><div class="a"><b>'+c.au+'</b><span>Aus.</span></div><div><b>'+c.n+'</b><span>Pend.</span></div>';
+  $('finbtn').textContent=m&&S.finalized[S.cur]?'✓ Finalizada':'Finalizar';
+  if(!m){$('list').innerHTML='<div class="empty">Crie uma reunião com “＋ Nova”.</div>';return}
+  const a=att(),n=nts(),q=UI.q.trim().toLowerCase();
+  let h='';
+  if(!q&&!UI.unmarked){
+    h+='<div class="item" style="margin-top:12px"><div class="nm"><b>Visitantes / não cadastrados</b><span class="why" style="display:block">Total da assistência: <b>'+c.assist+'</b></span></div>'+
+       '<button class="ibtn" data-act="visMinus" style="min-height:54px;min-width:54px;font-size:22px">−</button><b style="min-width:30px;text-align:center;font-size:20px">'+c.vis+'</b><button class="ibtn" data-act="visPlus" style="min-height:54px;min-width:54px;font-size:22px">＋</button></div>';
+  }
+  groupsList().forEach(g=>{
+    const all=pubs.filter(p=>p.group===g);if(!all.length)return;
+    const marked=all.filter(p=>a[p.id]).length;
+    const rows=all.filter(p=>(!q||p.name.toLowerCase().includes(q))&&(!UI.unmarked||!a[p.id]));
+    if(!rows.length)return;
+    const col=UI.collapsed[g]&&!q;
+    h+='<div class="ghead" data-act="toggleG" data-g="'+g+'">'+(col?'▸':'▾')+' Grupo '+g+'<span class="prog">'+marked+' / '+all.length+'</span><button class="chip" data-act="grpPres" data-g="'+g+'" style="min-height:36px;padding:4px 10px">✓ todos</button></div><div class="gbar"><i style="width:'+(marked/all.length*100)+'%"></i></div>';
+    if(col)return;
+    rows.forEach(p=>{
+      const s=a[p.id]||null,note=n[p.id];
+      h+='<div class="item"><div class="nm"><b>'+esc(p.name)+'</b>'+
+        ((s==='zoom'||s==='ausente')?'<button class="why" data-act="reason" data-pid="'+p.id+'">'+(note?esc(note):'＋ motivo')+'</button>':'')+
+        '</div><button class="ibtn" data-act="editPub" data-pid="'+p.id+'" style="min-width:44px;min-height:54px;padding:0 10px" title="Editar irmão">✎</button><button class="st '+(s||'')+'" data-act="cycle" data-pid="'+p.id+'">'+(s?LBL[s]:'Marcar')+'</button></div>';
+    });
+  });
+  $('list').innerHTML=h||'<div class="empty">'+(UI.unmarked&&!q?'Todos marcados 🎉':'Nenhum irmão encontrado.')+'</div>';
+  fixHead();
+}
+function fixHead(){document.documentElement.style.setProperty('--hh',$('top').offsetHeight+'px')}
+addEventListener('resize',fixHead);
+
+function setView(v){
+  UI.view=v;$('snack').classList.remove('show');
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  const ch=v==='chamada';
+  $('chamadaBar').style.display=ch?'':'none';$('list').style.display=ch?'':'none';$('foot').style.display=ch?'':'none';$('dash').style.display=ch?'none':'';
+  if(!ch&&!D.built)buildDash();
+  render();window.scrollTo(0,0);
+}
+
+/* ============ PAINEL ============ */
+const D={type:'all',group:'all',last:0,q:'',built:false};
+function buildDash(){
+  D.built=true;
+  $('dash').innerHTML=
+   '<div class="seg" id="dType"><button data-act="dType" data-v="all" class="on">Todas</button><button data-act="dType" data-v="midweek">Meio</button><button data-act="dType" data-v="weekend">Fim</button></div>'+
+   '<div class="row mt"><select id="dGroup"></select><select id="dLast"><option value="0">Todo o período</option><option value="4">Últimas 4</option><option value="8">Últimas 8</option><option value="12">Últimas 12</option></select></div>'+
+   '<div class="row mt"><input type="search" id="dq" placeholder="Buscar irmão no quadro…"></div>'+
+   '<div class="kpis mt" id="dkpis"></div>'+
+   '<div class="grid2"><div class="card"><h2>Assistência por reunião</h2><div id="dchart"></div><div class="legend"><span><i class="dot" style="background:var(--pres)"></i>Presencial</span><span><i class="dot" style="background:var(--zoom)"></i>Zoom</span><span><i class="dot" style="background:var(--vis)"></i>Visitantes</span><span><i class="dot" style="background:var(--aus)"></i>Ausente</span></div></div>'+
+   '<div class="card"><h2>Ausências seguidas</h2><div id="dalerts"></div></div></div>'+
+   '<div class="card" style="margin-top:12px"><h2>Por grupo</h2><table class="groups" id="dgroups"></table></div>'+
+   '<div class="card" style="margin:12px 0"><h2>Quadro de presença</h2><div class="legend" style="margin:0"><span><span class="c presencial">P</span> Presencial</span><span><span class="c zoom">Z</span> Zoom</span><span><span class="c ausente">A</span> Ausente</span><span><span class="c none">–</span> Sem marca</span></div><div class="matrix-wrap"><table class="m" id="dmatrix"></table></div></div>';
+  $('dGroup').onchange=e=>{D.group=e.target.value;renderDash()};
+  $('dLast').onchange=e=>{D.last=+e.target.value;renderDash()};
+  $('dq').oninput=e=>{D.q=e.target.value;renderDash()};
+}
+const dst=(m,p)=>(S.attendance[m.id]||{})[p.id]||null;
+function dMeetings(){
+  let ms=S.meetings.slice().sort((a,b)=>a.date.localeCompare(b.date)).filter(m=>Object.keys(S.attendance[m.id]||{}).length);
+  if(D.type!=='all')ms=ms.filter(m=>m.type===D.type);
+  if(D.last>0)ms=ms.slice(-D.last);return ms;
+}
+function dStats(ms,ps){return ms.map(m=>{let pr=0,z=0,a=0,n=0;ps.forEach(p=>{const s=dst(m,p);if(s==='presencial')pr++;else if(s==='zoom')z++;else if(s==='ausente')a++;else n++});const mk=pr+z+a;return{m,pr,z,a,n,total:pr+z,vis:S.visitors[m.id]||0,pct:mk?(pr+z)/mk*100:null}})}
+function renderDash(){
+  if(!D.built)buildDash();
+  const gs=groupsList(),gsel=$('dGroup');
+  gsel.innerHTML='<option value="all">Todos os grupos</option>'+gs.map(g=>'<option value="'+g+'"'+(String(g)===String(D.group)?' selected':'')+'>Grupo '+g+'</option>').join('');
+  const ms=dMeetings(),ps=pubs.filter(p=>D.group==='all'||p.group==+D.group),ss=dStats(ms,ps),done=ss.filter(x=>x.pct!==null);
+  const avg=done.length?done.reduce((s,x)=>s+x.total,0)/done.length:0;
+  const pct=done.length?done.reduce((s,x)=>s+x.pct,0)/done.length:0;
+  const avgVis=done.length?done.reduce((s,x)=>s+x.vis,0)/done.length:0;
+  const tp=done.reduce((s,x)=>s+x.pr,0),tz=done.reduce((s,x)=>s+x.z,0),zs=(tp+tz)?tz/(tp+tz)*100:0,last=done[done.length-1];
+  $('dkpis').innerHTML=[['Média de presentes',avg.toFixed(0),'de '+ps.length+' irmãos · +'+avgVis.toFixed(0)+' visitantes'],['Taxa de presença',pct.toFixed(0)+'%','média do período'],['Via Zoom',zs.toFixed(0)+'%',tz+' presenças online'],['Última reunião',last?(last.total+last.vis):'–',last?fmt(last.m.date)+' · com visitantes':'sem dados']]
+    .map(k=>'<div class="card kpi"><div class="l">'+k[0]+'</div><div class="n">'+k[1]+'</div><div class="d">'+k[2]+'</div></div>').join('');
+  // gráfico
+  if(!ss.length)$('dchart').innerHTML='<div class="empty">Sem reuniões no período.</div>';
+  else{
+    const W=640,H=230,L=34,B=34,T=10,n=ss.length,bw=Math.min(46,(W-L)/n*.62),step=(W-L)/n;
+    const max=Math.max(ps.length,...ss.map(x=>x.pr+x.z+x.a+x.vis),1),y=v=>T+(H-T-B)*(1-v/max);
+    let s='<svg class="chart" viewBox="0 0 '+W+' '+H+'">';
+    [0,.5,1].forEach(f=>{const v=Math.round(max*f);s+='<line x1="'+L+'" x2="'+W+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="var(--line)"/><text x="'+(L-6)+'" y="'+(y(v)+4)+'" text-anchor="end">'+v+'</text>'});
+    ss.forEach((x,i)=>{const cx=L+step*i+step/2,x0=cx-bw/2;let acc=0;
+      [['pr','var(--pres)'],['z','var(--zoom)'],['vis','var(--vis)'],['a','var(--aus)']].forEach(([k,c])=>{const v=x[k];if(!v)return;
+        s+='<rect x="'+x0+'" y="'+y(acc+v)+'" width="'+bw+'" height="'+(y(acc)-y(acc+v))+'" fill="'+c+'" rx="3"><title>'+fmt(x.m.date)+' – '+k+': '+v+'</title></rect>';acc+=v});
+      s+='<text x="'+cx+'" y="'+(H-B+14)+'" text-anchor="middle">'+fmt(x.m.date)+'</text><text x="'+cx+'" y="'+(H-B+27)+'" text-anchor="middle">'+(x.m.type==='midweek'?'meio':'fim')+'</text>'});
+    $('dchart').innerHTML=s+'</svg>';
+  }
+  // ausências seguidas
+  const streak=p=>{let c=0;for(let i=ms.length-1;i>=0;i--){const s=dst(ms[i],p);if(s==='ausente')c++;else if(s===null)continue;else break}return c};
+  const al=ps.map(p=>({p,c:streak(p)})).filter(x=>x.c>=2).sort((a,b)=>b.c-a.c);
+  $('dalerts').innerHTML=al.length?al.map(x=>'<div class="alert"><div>'+esc(x.p.name)+'<small>Grupo '+x.p.group+'</small></div><span class="bdg">'+x.c+' seguidas</span></div>').join(''):'<div class="small">Nenhum irmão com 2 ou mais ausências seguidas. 🙂</div>';
+  // grupos
+  let gh='<tr><th>Grupo</th><th>Irmãos</th><th>Presença</th><th></th></tr>';
+  gs.forEach(g=>{const gp=pubs.filter(p=>p.group===g);if(!gp.length)return;const sg=dStats(ms,gp).filter(x=>x.pct!==null),pc=sg.length?sg.reduce((s,x)=>s+x.pct,0)/sg.length:0;
+    gh+='<tr><td>Grupo '+g+'</td><td>'+gp.length+'</td><td>'+pc.toFixed(0)+'%</td><td style="width:40%"><div class="pbar"><i style="width:'+pc+'%"></i></div></td></tr>'});
+  $('dgroups').innerHTML=gh;
+  // quadro
+  const q=D.q.trim().toLowerCase(),rows=ps.filter(p=>!q||p.name.toLowerCase().includes(q));
+  let mh='<thead><tr><th class="name">Irmão</th>'+ms.map(m=>'<th>'+fmt(m.date)+'<br>'+(m.type==='midweek'?'meio':'fim')+'</th>').join('')+'<th>%</th></tr></thead><tbody>';
+  rows.forEach(p=>{let ok=0,mk=0;
+    const cells=ms.map(m=>{const s=dst(m,p),note=((S.notes[m.id]||{})[p.id]);if(s)mk++;if(s==='presencial'||s==='zoom')ok++;
+      return '<td><span class="c '+(s||'none')+'" title="'+esc(note||'')+'">'+({presencial:'P',zoom:'Z',ausente:'A'}[s]||'–')+'</span></td>'}).join('');
+    mh+='<tr><td class="name">'+esc(p.name)+'<small>G'+p.group+'</small></td>'+cells+'<td><b>'+(mk?Math.round(ok/mk*100)+'%':'–')+'</b></td></tr>'});
+  $('dmatrix').innerHTML=mh+'</tbody>';
+}
+
+/* ============ SHEETS ============ */
+function sheet(html){$('sheet').innerHTML=html;$('ov').classList.add('show')}
+function closeSheet(){$('ov').classList.remove('show')}
+$('ov').addEventListener('click',e=>{if(e.target.id==='ov')closeSheet()});
+function snack(t,undo,fam){
+  snackFam=fam||null;$('snackt').textContent=t;
+  $('snackUndo').style.display=undo?'':'none';
+  $('snackFam').style.display=fam?'':'none';if(fam)$('snackFam').textContent='Família ('+fam.n+')';
+  const s=$('snack');s.classList.add('show');clearTimeout(snack.t);snack.t=setTimeout(()=>s.classList.remove('show'),6000);
+}
+
+function newMeetingSheet(){
+  const dow=new Date().getDay(),wk=(dow===0||dow===6)?'weekend':'midweek';
+  sheet('<h3>Nova reunião</h3><p>Escolha a data e o tipo.</p>'+
+   '<input type="date" id="nd" value="'+todayISO()+'">'+
+   '<select id="nt" class="mt"><option value="midweek"'+(wk==='midweek'?' selected':'')+'>Meio de semana</option><option value="weekend"'+(wk==='weekend'?' selected':'')+'>Fim de semana</option></select>'+
+   '<label class="lab"><input type="radio" name="init" value="pres" checked> Começar com todos presencial (marco só quem for diferente)</label>'+
+   '<label class="lab"><input type="radio" name="init" value="copy"> Copiar a chamada da reunião anterior</label>'+
+   '<label class="lab"><input type="radio" name="init" value="blank"> Começar em branco</label>'+
+   '<button class="ibtn primary" style="width:100%" data-act="createMeeting">Criar e começar</button>');
+}
+function createMeeting(){
+  const date=$('nd').value||todayISO(),type=$('nt').value,mode=document.querySelector('input[name=init]:checked').value;
+  const dows=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+  const prev=sorted().find(m=>m.type===type&&m.date<date)||sorted().find(m=>m.date<date);
+  const m={id:'m-'+Date.now(),type,date,dayOfWeek:dows[new Date(date+'T12:00:00').getDay()],titleOrTheme:type==='midweek'?'Nossa Vida e Ministério Cristão':'Discurso Público e A Sentinela',createdAt:new Date().toISOString()};
+  S.meetings.push(m);S.cur=m.id;S.attendance[m.id]={};S.notes[m.id]={};S.finalized[m.id]=false;
+  queueOp({t:'meeting',meeting:m});
+  if(mode==='pres')pubs.forEach(p=>{S.attendance[m.id][p.id]='presencial'});
+  if(mode==='copy'&&prev){pubs.forEach(p=>{const s=(S.attendance[prev.id]||{})[p.id];if(s){S.attendance[m.id][p.id]=s;const nn=(S.notes[prev.id]||{})[p.id];if(nn)S.notes[m.id][p.id]=nn}})}
+  Object.keys(S.attendance[m.id]).forEach(pid=>queueOp({t:'mark',mid:m.id,pid,st:S.attendance[m.id][pid],note:S.notes[m.id][pid]||''}));
+  save();closeSheet();render();window.scrollTo(0,0);
+}
+function reasonSheet(pid){
+  const p=pubs.find(x=>x.id===pid),s=att()[pid],cu=nts()[pid]||'';
+  sheet('<h3>'+esc(p.name)+'</h3><p>Motivo ('+LBL[s]+')</p><div class="chips" style="flex-wrap:wrap;overflow:visible">'+
+    REASONS[s].map(r=>'<button class="chip'+(cu===r?' on':'')+'" data-act="setReason" data-pid="'+pid+'" data-r="'+esc(r)+'">'+esc(r)+'</button>').join('')+'</div>'+
+    '<input type="text" id="rtxt" class="mt" placeholder="Outro motivo…" value="'+esc(REASONS[s].includes(cu)?'':cu)+'">'+
+    '<div class="row mt"><button class="ibtn" style="flex:1" data-act="setReason" data-pid="'+pid+'" data-r="">Limpar</button><button class="ibtn primary" style="flex:1" data-act="saveReasonTxt" data-pid="'+pid+'">Salvar</button></div>');
+}
+function finishSheet(){
+  const c=counts();
+  sheet('<h3>Finalizar chamada</h3><p>'+fmt(cur().date)+' · '+TYPE[cur().type]+'</p>'+
+   '<div class="cnt" style="margin-bottom:12px"><div class="p"><b>'+c.p+'</b><span>Presencial</span></div><div class="z"><b>'+c.z+'</b><span>Zoom</span></div><div class="v"><b>'+c.vis+'</b><span>Visitantes</span></div><div class="a"><b>'+c.au+'</b><span>Ausentes</span></div></div>'+
+   '<p style="color:var(--ink);font-size:18px;margin:0 0 8px">Assistência total: <b>'+c.assist+'</b></p>'+
+   (c.n?'<p style="color:var(--aus)">⚠ '+c.n+' irmão(s) sem marcação. Eles ficam como “não marcado”, não como ausente.</p>':'')+
+   '<div class="row"><button class="ibtn" style="flex:1" data-act="closeSheet">Voltar</button><button class="ibtn primary" style="flex:1" data-act="doFinish">Confirmar</button></div>'+
+   (c.n?'<button class="ibtn mt" style="width:100%" data-act="unmarkedAbsent">Marcar os '+c.n+' restantes como ausentes</button>':''));
+}
+function summaryText(){
+  const c=counts(),m=cur(),a=att(),n=nts();
+  const abs=pubs.filter(p=>a[p.id]==='ausente').map(p=>p.name+(n[p.id]?' ('+n[p.id]+')':''));
+  return 'Chamada '+fmt(m.date)+' – '+TYPE[m.type]+'\nPresenciais: '+c.p+'\nZoom: '+c.z+'\nVisitantes: '+c.vis+'\nAssistência total: '+c.assist+'\nAusentes: '+c.au+(abs.length?'\n'+abs.join('\n'):'');
+}
+
+/* ---- irmãos ---- */
+function managerSheet(){
+  sheet('<h3>Irmãos ('+S.publishers.length+')</h3><div class="row"><input type="search" id="mq" placeholder="Buscar…"><button class="ibtn primary" data-act="addPub">＋ Novo</button></div><div id="mlist" style="margin-top:10px"></div><button class="ibtn mt" style="width:100%" data-act="closeSheet">Fechar</button>');
+  const fill=()=>{const q=$('mq').value.trim().toLowerCase();
+    $('mlist').innerHTML=S.publishers.slice().sort((a,b)=>a.group-b.group||a.name.localeCompare(b.name,'pt-BR')).filter(p=>!q||p.name.toLowerCase().includes(q)).map(p=>
+      '<div class="item" style="box-shadow:none"><div class="nm"><b>'+esc(p.name)+'</b><span class="why" style="display:block">Grupo '+p.group+(p.familyName?' · '+esc(p.familyName):'')+(p.active===false?' · inativo':'')+'</span></div><button class="ibtn" data-act="editPub" data-pid="'+p.id+'">✎ Editar</button></div>').join('')||'<div class="empty">Nenhum irmão.</div>'};
+  $('mq').oninput=fill;fill();
+}
+function editSheet(pid){
+  const p=pid?S.publishers.find(x=>x.id===pid):{name:'',group:(groupsList()[0]||1),active:true,familyName:''};
+  const fams=[...new Set(S.publishers.map(x=>x.familyName).filter(Boolean))];
+  sheet('<h3>'+(pid?'Editar irmão':'Novo irmão')+'</h3>'+
+   '<div class="small" style="margin:0 0 4px">Nome</div><input type="text" id="en" value="'+esc(p.name)+'" placeholder="Nome completo">'+
+   '<div class="small" style="margin:12px 0 4px">Grupo</div><select id="eg">'+groupsList().map(g=>'<option value="'+g+'"'+(g===p.group?' selected':'')+'>Grupo '+g+'</option>').join('')+'<option value="new">＋ Novo grupo…</option></select>'+
+   '<input type="text" id="eng" class="mt" inputmode="numeric" placeholder="Número do novo grupo" style="display:none">'+
+   '<div class="small" style="margin:12px 0 4px">Família (opcional, para marcar todos juntos)</div><input type="text" id="ef" list="fams" value="'+esc(p.familyName||'')+'" placeholder="Ex.: Família Silva"><datalist id="fams">'+fams.map(f=>'<option value="'+esc(f)+'">').join('')+'</datalist>'+
+   '<label class="lab"><input type="checkbox" id="ea"'+(p.active!==false?' checked':'')+'> Ativo (aparece na chamada)</label>'+
+   '<div class="err" id="eerr"></div>'+
+   '<div class="row"><button class="ibtn" style="flex:1" data-act="closeSheet">Cancelar</button><button class="ibtn primary" style="flex:1" data-act="savePub" data-pid="'+(pid||'')+'">Salvar</button></div>'+
+   (pid?'<button class="ibtn mt" style="width:100%;color:var(--aus)" data-act="delPub" data-pid="'+pid+'">Excluir irmão</button>':''));
+  $('eg').onchange=e=>{$('eng').style.display=e.target.value==='new'?'':'none'};
+}
+function savePub(pid){
+  const name=$('en').value.trim().replace(/\s+/g,' ');let g=$('eg').value;
+  if(!name){$('eerr').textContent='Digite o nome.';return}
+  if(g==='new'){g=parseInt($('eng').value,10);if(!(g>0)){$('eerr').textContent='Digite o número do novo grupo.';return}}else g=parseInt(g,10);
+  if(S.publishers.some(x=>x.id!==pid&&x.name.toLowerCase()===name.toLowerCase())){$('eerr').textContent='Já existe um irmão com esse nome.';return}
+  const fam=$('ef').value.trim(),active=$('ea').checked;let p;
+  if(pid){p=S.publishers.find(x=>x.id===pid);p.name=name;p.group=g;p.active=active}
+  else{p={id:'pub-'+Date.now().toString(36),name,group:g,active};S.publishers.push(p)}
+  if(fam)p.familyName=fam;else delete p.familyName;
+  refreshPubs();queueOp({t:'pub',op:'upsert',publisher:{...p}});closeSheet();render();snack(name+' salvo (Grupo '+g+')',false);
+}
+function delSheet(pid){
+  const p=S.publishers.find(x=>x.id===pid);
+  sheet('<h3>Excluir '+esc(p.name)+'?</h3><p>Isso apaga o irmão <b>e todas as marcações dele</b> em todas as reuniões. Não dá para desfazer.</p><p>Se ele só saiu ou mudou de congregação, é melhor <b>desmarcar “Ativo”</b>: ele sai da chamada e o histórico fica.</p>'+
+   '<div class="row"><button class="ibtn" style="flex:1" data-act="editPub" data-pid="'+pid+'">Voltar</button><button class="ibtn primary" style="flex:1;background:var(--aus)" data-act="doDelPub" data-pid="'+pid+'">Excluir</button></div>');
+}
+
+/* ---- CSV ---- */
+const csvEsc=v=>{v=String(v==null?'':v);return /[;"\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+function download(name,text,mime){const b=new Blob([text],{type:mime});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove()}
+function parseCSV(text){
+  text=text.replace(/^\ufeff/,'');
+  const first=text.split(/\r?\n/)[0]||'';
+  const del=[';',',','\t'].sort((a,b)=>first.split(b).length-first.split(a).length)[0];
+  const rows=[];let row=[],f='',q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;
+    else if(c===del){row.push(f);f=''}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(f);f='';if(row.some(x=>x.trim()))rows.push(row);row=[]}
+    else f+=c}
+  row.push(f);if(row.some(x=>x.trim()))rows.push(row);return rows;
+}
+const norm=s=>String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+function exportSheet(){
+  sheet('<h3>Exportar / importar</h3><p>Os arquivos CSV abrem direto no Excel.</p>'+
+   '<button class="ibtn" style="width:100%" data-act="csvAtt">Presenças (CSV, todas as reuniões)</button>'+
+   '<button class="ibtn mt" style="width:100%" data-act="csvPubs">Lista de irmãos (CSV)</button>'+
+   '<button class="ibtn mt" style="width:100%" data-act="jsonAll">Backup completo (JSON)</button>'+
+   '<button class="ibtn primary mt" style="width:100%" data-act="importCsv">Importar irmãos de um CSV…</button>'+
+   '<p class="small" style="margin-top:12px">Colunas aceitas na importação: nome, grupo, familia, ativo. Se estiver no Excel, use “Salvar como → CSV”.</p>');
+}
+function csvAtt(){
+  const L=['data;tipo;grupo;nome;familia;status;motivo'];
+  S.meetings.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(m=>{
+    const a=S.attendance[m.id]||{},n=S.notes[m.id]||{};
+    S.publishers.slice().sort((x,y)=>x.group-y.group||x.name.localeCompare(y.name,'pt-BR')).forEach(p=>{
+      L.push([m.date,TYPE[m.type],p.group,p.name,p.familyName||'',a[p.id]||'nao_marcado',n[p.id]||''].map(csvEsc).join(';'))});
+    L.push([m.date,TYPE[m.type],'','(visitantes)','',S.visitors[m.id]||0,''].map(csvEsc).join(';'));
+  });
+  download('presencas-'+todayISO()+'.csv','\ufeff'+L.join('\r\n'),'text/csv;charset=utf-8');
+}
+function csvPubs(){
+  const L=['nome;grupo;familia;ativo'].concat(S.publishers.slice().sort((a,b)=>a.group-b.group||a.name.localeCompare(b.name,'pt-BR')).map(p=>[p.name,p.group,p.familyName||'',p.active===false?'nao':'sim'].map(csvEsc).join(';')));
+  download('irmaos-'+todayISO()+'.csv','\ufeff'+L.join('\r\n'),'text/csv;charset=utf-8');
+}
+function importPreview(text){
+  const rows=parseCSV(text);if(!rows.length){sheet('<h3>Importar</h3><p>Arquivo vazio.</p><button class="ibtn" style="width:100%" data-act="closeSheet">Fechar</button>');return}
+  const head=rows[0].map(norm),has=k=>head.findIndex(h=>k.includes(h));
+  let iN=has(['nome','name']),iG=has(['grupo','group']),iF=has(['familia','family']),iA=has(['ativo','active','situacao']),body=rows;
+  if(iN>=0||iG>=0)body=rows.slice(1);else{iN=0;iG=1;iF=2;iA=3}
+  const isNo=v=>['nao','n','0','false','inativo','no'].includes(norm(v)),isYes=v=>['sim','s','1','true','ativo','yes'].includes(norm(v));
+  const res=[];let add=0,upd=0,skip=0;
+  body.forEach(r=>{
+    const name=(r[iN]||'').trim().replace(/\s+/g,' ');if(!name){skip++;return}
+    const g=parseInt(r[iG],10),fam=(r[iF]||'').trim(),av=r[iA];
+    const ex=S.publishers.find(p=>p.name.toLowerCase()===name.toLowerCase());
+    if(ex){res.push({ex:ex.id,name,g:g>0?g:ex.group,fam:iF>=0?fam:ex.familyName||'',active:av!==undefined&&av!==''?!isNo(av):ex.active!==false});upd++}
+    else if(g>0){res.push({name,g,fam,active:av!==undefined&&av!==''?!isNo(av):true});add++}
+    else skip++;
+  });
+  pendingImport=res;
+  sheet('<h3>Importar irmãos</h3><p><b>'+add+'</b> novo(s), <b>'+upd+'</b> atualizado(s)'+(skip?', <b>'+skip+'</b> linha(s) ignorada(s) (sem nome ou sem grupo)':'')+'.</p><p>Quem já existe é reconhecido pelo nome. Ninguém é apagado.</p>'+
+   '<div class="row"><button class="ibtn" style="flex:1" data-act="closeSheet">Cancelar</button><button class="ibtn primary" style="flex:1" data-act="doImport"'+(add+upd?'':' disabled')+'>Importar</button></div>');
+}
+$('csvfile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>importPreview(String(r.result));r.readAsText(f,'utf-8');e.target.value=''};
+
+/* ============ EVENTOS ============ */
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');if(!t)return;const act=t.dataset.act,pid=t.dataset.pid;
+  if(act==='tab')setView(t.dataset.v);
+  else if(act==='dType'){D.type=t.dataset.v;document.querySelectorAll('#dType button').forEach(b=>b.classList.toggle('on',b===t));renderDash()}
+  else if(act==='cycle'){if(!guard())return;const s=att()[pid]||null,nx=NEXT[s];setStatus(pid,nx);buzz();
+    const p=pubs.find(x=>x.id===pid),fm=famMembers(p).length;render();snack(p.name+': '+(nx?LBL[nx]:'sem marcação'),true,fm?{pid,st:nx,n:fm}:null)}
+  else if(act==='applyFam'){if(!snackFam||!guard())return;const p=pubs.find(x=>x.id===snackFam.pid),mem=famMembers(p),k=bulk(mem.map(x=>({pid:x.id,st:snackFam.st})));
+    render();snack(k+' da família marcado(s): '+(snackFam&&snackFam.st?LBL[snackFam.st]:'sem marcação'),true)}
+  else if(act==='undo'){const u=undoStack.pop();if(!u)return;S.cur=u.mid;u.entries.forEach(x=>applyMark(x.pid,x.st,x.note));$('snack').classList.remove('show');render()}
+  else if(act==='reason'){if(guard())reasonSheet(pid)}
+  else if(act==='setReason'){setStatus(pid,att()[pid],t.dataset.r);closeSheet();render()}
+  else if(act==='saveReasonTxt'){setStatus(pid,att()[pid],$('rtxt').value.trim());closeSheet();render()}
+  else if(act==='toggleG'){UI.collapsed[t.dataset.g]=!UI.collapsed[t.dataset.g];render()}
+  else if(act==='grpPres'){if(!guard())return;const g=+t.dataset.g,k=bulk(pubs.filter(p=>p.group===g&&!att()[p.id]).map(p=>({pid:p.id,st:'presencial'})));render();snack(k+' do Grupo '+g+' marcados presencial',k>0)}
+  else if(act==='fUnmarked'){UI.unmarked=!UI.unmarked;render()}
+  else if(act==='allPres'){if(!guard())return;const k=bulk(pubs.filter(p=>!att()[p.id]).map(p=>({pid:p.id,st:'presencial'})));render();snack(k+' marcados como presencial',k>0)}
+  else if(act==='copyPrev'){if(!guard())return;
+    const m=cur(),prev=sorted().find(x=>x.id!==m.id&&x.date<m.date&&x.type===m.type)||sorted().find(x=>x.id!==m.id&&x.date<m.date);
+    if(!prev){snack('Não há reunião anterior',false);return}
+    const list=[];pubs.forEach(p=>{const s=(S.attendance[prev.id]||{})[p.id];if(s&&!att()[p.id])list.push({pid:p.id,st:s,note:(S.notes[prev.id]||{})[p.id]})});
+    const k=bulk(list);render();snack(k+' copiados de '+fmt(prev.date),k>0)}
+  else if(act==='visPlus'||act==='visMinus'){if(!guard())return;const v=Math.max(0,(S.visitors[S.cur]||0)+(act==='visPlus'?1:-1));S.visitors[S.cur]=v;buzz();queueOp({t:'visitors',mid:S.cur,n:v});render()}
+  else if(act==='summary'){const tx=summaryText();(navigator.clipboard?navigator.clipboard.writeText(tx):Promise.reject()).then(()=>snack('Resumo copiado',false)).catch(()=>sheet('<h3>Resumo</h3><textarea style="width:100%;height:200px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px">'+esc(tx)+'</textarea>'))}
+  else if(act==='exportSheet')exportSheet();
+  else if(act==='csvAtt'){csvAtt();closeSheet()}
+  else if(act==='csvPubs'){csvPubs();closeSheet()}
+  else if(act==='jsonAll'){download('chamada-'+todayISO()+'.json',JSON.stringify({congregationName:S.congName||DB.congregationName,publishers:S.publishers,meetings:S.meetings,attendance:S.attendance,attendanceNotes:S.notes,visitors:S.visitors,exportDate:new Date().toISOString()},null,1),'application/json');closeSheet()}
+  else if(act==='importCsv'){closeSheet();$('csvfile').click()}
+  else if(act==='doImport'){(pendingImport||[]).forEach(x=>{let p=x.ex?S.publishers.find(q=>q.id===x.ex):null;
+      if(p){p.group=x.g;p.active=x.active;if(x.fam)p.familyName=x.fam;else delete p.familyName}
+      else{p={id:'pub-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:x.name,group:x.g,active:x.active};if(x.fam)p.familyName=x.fam;S.publishers.push(p)}
+      queueOp({t:'pub',op:'upsert',publisher:{...p}})});
+    const k=(pendingImport||[]).length;pendingImport=null;refreshPubs();closeSheet();render();snack(k+' irmão(s) importado(s)',false)}
+  else if(act==='editCong'){sheet('<h3>Nome da congregação</h3><p>Aparece no topo do app.</p><input type="text" id="cn" value="'+esc(S.congName||DB.congregationName||'')+'" placeholder="Nome da congregação"><div class="err" id="cerr"></div><div class="row mt"><button class="ibtn" style="flex:1" data-act="closeSheet">Cancelar</button><button class="ibtn primary" style="flex:1" data-act="saveCong">Salvar</button></div>');setTimeout(()=>{const i=$('cn');i&&i.focus()},50)}
+  else if(act==='saveCong'){const v=$('cn').value.trim().replace(/\s+/g,' ');if(!v){$('cerr').textContent='Digite o nome.';return}S.congName=v;queueOp({t:'congregation',name:v});closeSheet();render();snack('Nome salvo',false)}
+  else if(act==='managePubs')managerSheet();
+  else if(act==='addPub')editSheet(null);
+  else if(act==='editPub')editSheet(pid);
+  else if(act==='savePub')savePub(pid);
+  else if(act==='delPub')delSheet(pid);
+  else if(act==='doDelPub'){const p=S.publishers.find(x=>x.id===pid);S.publishers=S.publishers.filter(x=>x.id!==pid);
+    Object.values(S.attendance).forEach(m=>delete m[pid]);Object.values(S.notes).forEach(m=>delete m[pid]);
+    S.opQueue=S.opQueue.filter(o=>!(o.t==='mark'&&o.pid===pid));
+    refreshPubs();queueOp({t:'pub',op:'delete',publisher:{id:pid}});closeSheet();render();snack('Irmão excluído',false)}
+  else if(act==='newMeeting')newMeetingSheet();
+  else if(act==='createMeeting')createMeeting();
+  else if(act==='finish'){if(S.finalized[S.cur])guard();else if(cur())finishSheet()}
+  else if(act==='reopen'){S.finalized[S.cur]=false;queueOp({t:'final',mid:S.cur,finalized:false});closeSheet();render()}
+  else if(act==='closeSheet')closeSheet();
+  else if(act==='unmarkedAbsent'){bulk(pubs.filter(p=>!att()[p.id]).map(p=>({pid:p.id,st:'ausente'})));finishSheet();render()}
+  else if(act==='doFinish'){S.finalized[S.cur]=true;queueOp({t:'final',mid:S.cur,finalized:true});closeSheet();render();snack('Chamada finalizada ✓',false);flush()}
+  else if(act==='install'){if(deferredInstall){deferredInstall.prompt();deferredInstall=null;render()}}
+  else if(act==='lock'){sessionStorage.removeItem('chamada.ok');location.reload()}
+});
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;if(UI.view==='chamada'&&$('gate').style.display==='none')render()});
+$('msel').onchange=e=>{S.cur=e.target.value;save();render()};
+$('q').oninput=e=>{UI.q=e.target.value;render()};
+$('theme').onclick=()=>{const r=document.documentElement,d=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);r.dataset.theme=d?'light':'dark';try{localStorage.setItem('chamada.theme',r.dataset.theme)}catch(e){}};
+try{const th=localStorage.getItem('chamada.theme');if(th)document.documentElement.dataset.theme=th}catch(e){}
+
+/* ============ ACESSO (Gmail + PIN) ============ */
+async function sha(s){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('chamada|'+s));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}catch(e){let h=0;for(const c of 'chamada|'+s)h=(h*31+c.charCodeAt(0))|0;return 'f'+h}}
+function unlock(){sessionStorage.setItem('chamada.ok','1');$('gate').style.display='none';start()}
+function initGate(){
+  $('allowed').textContent=CFG.allowedEmail;
+  if(sessionStorage.getItem('chamada.ok')){$('gate').style.display='none';start();return}
+  const hasPin=!!localStorage.getItem('chamada.pin');
+  $('pinmsg').textContent=hasPin?'Digite seu PIN para entrar':'Primeiro acesso: crie um PIN (mínimo 4 números)';
+  $('gnote').textContent=CFG.googleClientId?'Entre com o Google ou use o PIN deste aparelho.':'Login com Google ainda não configurado: use o PIN deste aparelho.';
+  $('pinok').onclick=async()=>{
+    const v=$('pin').value.trim();
+    if(!/^\d{4,}$/.test(v)){$('err').textContent='Use pelo menos 4 números.';return}
+    const h=await sha(v);
+    if(!hasPin){localStorage.setItem('chamada.pin',h);unlock()}
+    else if(localStorage.getItem('chamada.pin')===h)unlock();
+    else $('err').textContent='PIN incorreto.';
+  };
+  $('pin').onkeydown=e=>{if(e.key==='Enter')$('pinok').click()};
+  if(CFG.googleClientId&&/^https?:/.test(location.protocol)){
+    const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.async=true;
+    s.onload=()=>{google.accounts.id.initialize({client_id:CFG.googleClientId,callback:r=>{
+      try{const j=JSON.parse(decodeURIComponent(escape(atob(r.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')))));
+        if(j.email_verified&&j.email.toLowerCase()===CFG.allowedEmail.toLowerCase())unlock();else $('err').textContent='Esta conta não tem acesso.';
+      }catch(e){$('err').textContent='Falha no login.'}}});
+      google.accounts.id.renderButton($('gbtn'),{theme:'outline',size:'large',text:'signin_with',width:300})};
+    document.head.appendChild(s);
+  }
+}
+function start(){
+  render();flush();setTimeout(fixHead,50);
+  if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+initGate();
+</script>
+</body>
+</html>
