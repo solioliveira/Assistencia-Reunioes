@@ -168,7 +168,7 @@ export async function syncAttendanceToFirestore(
       payload.lastEditorDeviceName = editorInfo.deviceName;
       payload.lastEditedDescription = editorInfo.description || 'Chamada atualizada';
     }
-    await setDoc(doc(db, 'attendance', meetingId), payload, { merge: true });
+    await setDoc(doc(db, 'attendance', meetingId), payload);
 
     if (editorInfo) {
       await syncMetadataToFirestore({

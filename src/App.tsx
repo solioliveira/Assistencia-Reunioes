@@ -36,6 +36,7 @@ import {
   deleteMeetingOnServer,
   deletePublisherOnServer,
   fetchServerDatabase,
+  pollServerChanges,
   restoreTuesdaySaturdayOnServer,
   sendAttendanceToServer,
   sendDatabaseToServer,
@@ -271,6 +272,12 @@ export function App() {
   const [lastSavedTimestamp, setLastSavedTimestamp] = useState<Record<string, string>>({});
   const [isAutoPollActive] = useState<boolean>(true);
 
+  // Refs de controle para sincronização simultânea sem conflitos (evita que polling sobrescreva toque local em andamento)
+  const lastLocalMutationTimeRef = useRef<number>(0);
+  const inFlightMutationsRef = useRef<number>(0);
+  const lastServerUpdatedRef = useRef<string>('');
+  const lastSyncedRemoteMeetingRef = useRef<string>('');
+
   // Monitora a fila de pendências salva localmente
   useEffect(() => {
     const unsub = subscribeToQueueChanges((q) => {
@@ -367,9 +374,13 @@ export function App() {
   // Sincronização em tempo real com o servidor central e outros aparelhos (SSE + REST)
   useEffect(() => {
     let isMounted = true;
+    const myDeviceId = getDeviceInfo().deviceId;
 
     fetchServerDatabase().then((serverDb) => {
       if (!isMounted || !serverDb) return;
+      if (serverDb.lastUpdated) {
+        lastServerUpdatedRef.current = serverDb.lastUpdated;
+      }
       setDatabase((prev) => {
         const hasServerData =
           (serverDb.publishers && serverDb.publishers.length > 0) ||
@@ -403,6 +414,20 @@ export function App() {
         saveDatabase(syncedDb);
         return syncedDb;
       });
+
+      // Sincroniza a reunião selecionada com a última reunião ativa ou mais recente do servidor
+      if (Array.isArray(serverDb.meetings) && serverDb.meetings.length > 0) {
+        const activeRemoteMid = serverDb.syncMetadata?.lastEditedMeetingId;
+        if (activeRemoteMid && serverDb.meetings.some((m) => m.id === activeRemoteMid)) {
+          lastSyncedRemoteMeetingRef.current = activeRemoteMid;
+          setSelectedMeetingId(activeRemoteMid);
+        } else {
+          const sorted = [...serverDb.meetings].sort((a, b) => b.date.localeCompare(a.date));
+          if (sorted[0]) {
+            setSelectedMeetingId(sorted[0].id);
+          }
+        }
+      }
     });
 
     const unsubSse = subscribeToServerEvents({
@@ -414,20 +439,21 @@ export function App() {
       },
       onAttendanceUpdated: (data) => {
         if (!isMounted) return;
+        if (data.lastUpdated) {
+          lastServerUpdatedRef.current = data.lastUpdated;
+        }
         setDatabase((prev) => {
-          // Respeita substituições completas do mapa de presença daquela reunião (inclusive desmarcações)
+          // Substitui integralmente o mapa de presença e notas daquela reunião (inclusive desmarcações e visitantes)
           const updatedMeetingAtt = { ...(data.attendance || {}) };
-          const newNotes = data.notes
-            ? {
-                ...(prev.attendanceNotes || {}),
-                [data.meetingId]: {
-                  ...(prev.attendanceNotes?.[data.meetingId] || {}),
-                  ...data.notes,
-                },
-              }
-            : prev.attendanceNotes;
+          const newNotes =
+            data.notes !== undefined
+              ? {
+                  ...(prev.attendanceNotes || {}),
+                  [data.meetingId]: { ...data.notes },
+                }
+              : prev.attendanceNotes;
 
-          return {
+          const nextDb: CongregationDatabase = {
             ...prev,
             attendance: {
               ...prev.attendance,
@@ -441,11 +467,27 @@ export function App() {
               lastEditedMeetingId: data.meetingId,
               lastEditedDescription: 'Chamada atualizada em tempo real',
             },
+            lastUpdated: data.lastUpdated || new Date().toISOString(),
           };
+          saveDatabase(nextDb);
+          return nextDb;
         });
+
+        // Se outro aparelho está fazendo chamada em uma reunião, acompanha simultaneamente a mesma reunião
+        if (
+          data.meetingId &&
+          data.sourceDeviceId !== myDeviceId &&
+          Date.now() - lastLocalMutationTimeRef.current > 5000
+        ) {
+          lastSyncedRemoteMeetingRef.current = data.meetingId;
+          setSelectedMeetingId(data.meetingId);
+        }
       },
       onDatabaseUpdated: (data) => {
         if (!isMounted) return;
+        if (data.database?.lastUpdated) {
+          lastServerUpdatedRef.current = data.database.lastUpdated;
+        }
         setDatabase((prev) => {
           const nextDb: CongregationDatabase = {
             ...prev,
@@ -463,37 +505,70 @@ export function App() {
           saveDatabase(nextDb);
           return nextDb;
         });
-        if (data.sourceDeviceName) {
+        const remoteMid = data.database?.syncMetadata?.lastEditedMeetingId;
+        if (
+          remoteMid &&
+          data.sourceDeviceId !== myDeviceId &&
+          Array.isArray(data.database?.meetings) &&
+          data.database.meetings.some((m) => m.id === remoteMid)
+        ) {
+          lastSyncedRemoteMeetingRef.current = remoteMid;
+          setSelectedMeetingId(remoteMid);
+        }
+        if (data.sourceDeviceName && data.sourceDeviceId !== myDeviceId) {
           setSyncToastMessage(`🔄 Sincronizado com ${data.sourceDeviceName}`);
-          setTimeout(() => setSyncToastMessage(null), 3500);
+          setTimeout(() => setSyncToastMessage(null), 3000);
         }
       },
       onPublisherUpdated: (data) => {
         if (!isMounted) return;
-        setDatabase((prev) => ({
-          ...prev,
-          publishers: data.publishers,
-        }));
+        if (data.lastUpdated) {
+          lastServerUpdatedRef.current = data.lastUpdated;
+        }
+        setDatabase((prev) => {
+          const nextDb = {
+            ...prev,
+            publishers: data.publishers,
+            lastUpdated: data.lastUpdated || prev.lastUpdated,
+          };
+          saveDatabase(nextDb);
+          return nextDb;
+        });
       },
       onMeetingUpdated: (data) => {
         if (!isMounted) return;
+        if (data.lastUpdated) {
+          lastServerUpdatedRef.current = data.lastUpdated;
+        }
         setDatabase((prev) => {
           const validMeetingIds = new Set((data.meetings || []).map((m) => m.id));
+          const sourceAtt = data.attendance || prev.attendance || {};
+          const sourceNotes = data.attendanceNotes || prev.attendanceNotes || {};
           const nextAtt: Record<string, Record<string, AttendanceStatus>> = {};
-          Object.entries(prev.attendance || {}).forEach(([mid, att]) => {
+          Object.entries(sourceAtt).forEach(([mid, att]) => {
             if (validMeetingIds.has(mid)) nextAtt[mid] = att;
           });
           const nextNotes: Record<string, Record<string, string>> = {};
-          Object.entries(prev.attendanceNotes || {}).forEach(([mid, notes]) => {
+          Object.entries(sourceNotes).forEach(([mid, notes]) => {
             if (validMeetingIds.has(mid)) nextNotes[mid] = notes;
           });
-          return {
+          const nextDb: CongregationDatabase = {
             ...prev,
             meetings: data.meetings,
             attendance: nextAtt,
             attendanceNotes: nextNotes,
+            syncMetadata: data.metadata || prev.syncMetadata,
+            lastUpdated: data.lastUpdated || prev.lastUpdated,
           };
+          saveDatabase(nextDb);
+          return nextDb;
         });
+
+        // Se uma nova reunião foi criada em outro aparelho, seleciona ela automaticamente
+        if (data.meeting?.id && data.sourceDeviceId !== myDeviceId) {
+          lastSyncedRemoteMeetingRef.current = data.meeting.id;
+          setSelectedMeetingId(data.meeting.id);
+        }
       },
     });
 
@@ -560,14 +635,16 @@ export function App() {
     return detectAbsenceStreaks(database.publishers, database.meetings, database.attendance);
   }, [database.publishers, database.meetings, database.attendance]);
 
-  // Auxiliar para sincronizar presença + notas de uma reunião
+  // Auxiliar para sincronizar presença + notas de uma reunião (com suporte a changes atômicos)
   const syncMeetingAttendanceAndNotes = useCallback(
     (
       meetingId: string,
       meetingAtt: Record<string, AttendanceStatus>,
       meetingNotes: Record<string, string>,
-      description: string
+      description: string,
+      changes?: Array<{ pid: string; st: AttendanceStatus | null; note?: string }>
     ) => {
+      lastLocalMutationTimeRef.current = Date.now();
       const device = getDeviceInfo();
       const editorInfo = {
         deviceId: device.deviceId,
@@ -576,9 +653,18 @@ export function App() {
       };
 
       if (isOnline) {
-        sendAttendanceToServer(meetingId, meetingAtt, meetingNotes, editorInfo).catch(() => {
-          enqueueAttendanceSync(meetingId, meetingAtt, meetingNotes);
-        });
+        inFlightMutationsRef.current += 1;
+        sendAttendanceToServer(meetingId, meetingAtt, meetingNotes, editorInfo, changes)
+          .then((ok) => {
+            if (!ok) enqueueAttendanceSync(meetingId, meetingAtt, meetingNotes);
+          })
+          .catch(() => {
+            enqueueAttendanceSync(meetingId, meetingAtt, meetingNotes);
+          })
+          .finally(() => {
+            inFlightMutationsRef.current = Math.max(0, inFlightMutationsRef.current - 1);
+          });
+
         if (isFirebaseActive) {
           syncAttendanceToFirestore(meetingId, meetingAtt, meetingNotes, editorInfo)
             .then((success) => {
@@ -599,6 +685,7 @@ export function App() {
     publisherId: string,
     status: AttendanceStatus
   ) => {
+    lastLocalMutationTimeRef.current = Date.now();
     setDatabase((prev) => {
       const meetingAtt = { ...(prev.attendance[meetingId] || {}) };
       meetingAtt[publisherId] = status;
@@ -627,7 +714,8 @@ export function App() {
         meetingId,
         meetingAtt,
         updatedDb.attendanceNotes?.[meetingId] || {},
-        'Chamada atualizada'
+        'Chamada atualizada',
+        [{ pid: publisherId, st: status }]
       );
 
       return updatedDb;
@@ -639,6 +727,7 @@ export function App() {
     publisherIds: string[],
     status: AttendanceStatus
   ) => {
+    lastLocalMutationTimeRef.current = Date.now();
     setDatabase((prev) => {
       const meetingAtt = { ...(prev.attendance[meetingId] || {}) };
       publisherIds.forEach((pid) => {
@@ -669,19 +758,21 @@ export function App() {
         meetingId,
         meetingAtt,
         updatedDb.attendanceNotes?.[meetingId] || {},
-        'Chamada em lote atualizada'
+        'Chamada em lote atualizada',
+        publisherIds.map((pid) => ({ pid, st: status }))
       );
 
       return updatedDb;
     });
   };
 
-  // HANDLER DE OBSERVAÇÃO / MOTIVO (QUANDO ZOOM OU AUSENTE)
+  // HANDLER DE OBSERVAÇÃO / MOTIVO / VISITANTES / FINALIZADA
   const handleAttendanceNoteChange = (
     meetingId: string,
     publisherId: string,
     note: string
   ) => {
+    lastLocalMutationTimeRef.current = Date.now();
     setDatabase((prev) => {
       const currentNotes = { ...(prev.attendanceNotes || {}) };
       const meetingNotes = { ...(currentNotes[meetingId] || {}) };
@@ -714,7 +805,8 @@ export function App() {
         meetingId,
         meetingAtt,
         meetingNotes,
-        'Observação da reunião atualizada'
+        'Observação da reunião atualizada',
+        [{ pid: publisherId, st: meetingAtt[publisherId] || undefined as any, note: note.trim() }]
       );
 
       return updatedDb;
@@ -730,6 +822,7 @@ export function App() {
       preserveExistingMarks: boolean;
     }
   ) => {
+    lastLocalMutationTimeRef.current = Date.now();
     setDatabase((prev) => {
       const sourceAtt = prev.attendance[sourceMeetingId] || {};
       const currentAtt = { ...(prev.attendance[targetMeetingId] || {}) };
@@ -833,50 +926,46 @@ export function App() {
 
   // ATUALIZAR DADOS E RECARREGAR CHAMADA DO SERVIDOR
   const handleRefreshAttendanceData = async (silent: boolean = false) => {
+    // Nunca sobrescreve mutações locais recentes ou em andamento durante atualizações silenciosas
+    if (
+      silent &&
+      (inFlightMutationsRef.current > 0 || Date.now() - lastLocalMutationTimeRef.current < 2000)
+    ) {
+      return;
+    }
     if (!silent) setIsRefreshingAttendance(true);
     try {
-      let currentDb = loadDatabase();
-
       if (isOnline) {
         const serverDb = await fetchServerDatabase();
-        if (serverDb) {
-          currentDb = {
-            ...currentDb,
-            ...serverDb,
-            publishers: Array.isArray(serverDb.publishers) ? serverDb.publishers : currentDb.publishers,
-            meetings: Array.isArray(serverDb.meetings) ? serverDb.meetings : currentDb.meetings,
-            attendance: serverDb.attendance || {},
-            attendanceNotes: serverDb.attendanceNotes || {},
-            shepherdingVisits: Array.isArray(serverDb.shepherdingVisits)
-              ? serverDb.shepherdingVisits
-              : currentDb.shepherdingVisits,
-            syncMetadata: serverDb.syncMetadata || currentDb.syncMetadata,
-            lastUpdated: new Date().toISOString(),
-          };
+        if (
+          silent &&
+          (inFlightMutationsRef.current > 0 || Date.now() - lastLocalMutationTimeRef.current < 2000)
+        ) {
+          return;
         }
-
-        if (isFirebaseActive) {
-          const remoteData = await fetchRemoteFirestoreData();
-          if (remoteData) {
-            currentDb = {
-              ...currentDb,
-              ...remoteData,
-              publishers: remoteData.publishers?.length ? remoteData.publishers : currentDb.publishers,
-              meetings: remoteData.meetings?.length ? remoteData.meetings : currentDb.meetings,
-              attendance: { ...currentDb.attendance, ...(remoteData.attendance || {}) },
-              attendanceNotes: { ...(currentDb.attendanceNotes || {}), ...(remoteData.attendanceNotes || {}) },
-              shepherdingVisits: remoteData.shepherdingVisits?.length
-                ? remoteData.shepherdingVisits
-                : currentDb.shepherdingVisits,
-              syncMetadata: remoteData.syncMetadata || currentDb.syncMetadata,
-              lastUpdated: new Date().toISOString(),
-            };
+        if (serverDb) {
+          if (serverDb.lastUpdated) {
+            lastServerUpdatedRef.current = serverDb.lastUpdated;
           }
+          setDatabase((prev) => {
+            const nextDb: CongregationDatabase = {
+              ...prev,
+              ...serverDb,
+              publishers: Array.isArray(serverDb.publishers) ? serverDb.publishers : prev.publishers,
+              meetings: Array.isArray(serverDb.meetings) ? serverDb.meetings : prev.meetings,
+              attendance: serverDb.attendance || {},
+              attendanceNotes: serverDb.attendanceNotes || {},
+              shepherdingVisits: Array.isArray(serverDb.shepherdingVisits)
+                ? serverDb.shepherdingVisits
+                : prev.shepherdingVisits,
+              syncMetadata: serverDb.syncMetadata || prev.syncMetadata,
+              lastUpdated: serverDb.lastUpdated || prev.lastUpdated,
+            };
+            saveDatabase(nextDb);
+            return nextDb;
+          });
         }
       }
-
-      setDatabase(currentDb);
-      saveDatabase(currentDb);
     } catch (err) {
       console.error('Erro ao atualizar dados:', err);
     } finally {
@@ -884,15 +973,50 @@ export function App() {
     }
   };
 
-  // FORÇAR SINCRONIZAÇÃO COMPLETA: Envia o banco deste aparelho para todos os outros aparelhos
+  // BOTÃO ÚNICO DE SINCRONIZAÇÃO INTELIGENTE E SIMULTÂNEA (Funciona em qualquer aparelho!)
   const handleForcePushSyncAllDevices = async () => {
     setIsSyncingAttendance(true);
     buzz();
     try {
       await flushPendingQueue();
       const device = getDeviceInfo();
+      const serverDb = isOnline ? await fetchServerDatabase() : null;
+
+      const serverTime = serverDb?.lastUpdated ? new Date(serverDb.lastUpdated).getTime() : 0;
+      const localTime = database?.lastUpdated ? new Date(database.lastUpdated).getTime() : 0;
+      const recentLocalEdit = Date.now() - lastLocalMutationTimeRef.current < 15000;
+
+      // Se o servidor tiver dados mais novos feitos em outro aparelho (e este aparelho não acabou de editar),
+      // puxa os dados do servidor e também garante que todos fiquem sincronizados!
+      let unifiedDb: CongregationDatabase;
+      if (serverDb && serverTime > localTime && !recentLocalEdit) {
+        unifiedDb = {
+          ...database,
+          ...serverDb,
+          publishers: Array.isArray(serverDb.publishers) ? serverDb.publishers : database.publishers,
+          meetings: Array.isArray(serverDb.meetings) ? serverDb.meetings : database.meetings,
+          attendance: serverDb.attendance || {},
+          attendanceNotes: serverDb.attendanceNotes || {},
+          syncMetadata: serverDb.syncMetadata || database.syncMetadata,
+          lastUpdated: serverDb.lastUpdated,
+        };
+        if (serverDb.lastUpdated) {
+          lastServerUpdatedRef.current = serverDb.lastUpdated;
+        }
+        setDatabase(unifiedDb);
+        saveDatabase(unifiedDb);
+
+        const activeMid = unifiedDb.syncMetadata?.lastEditedMeetingId;
+        if (activeMid && unifiedDb.meetings.some((m) => m.id === activeMid)) {
+          setSelectedMeetingId(activeMid);
+        }
+        showSnack('✓ Sincronizado com todos os aparelhos!', false);
+        return;
+      }
+
+      // Caso contrário, envia o estado deste aparelho para o servidor e transmite simultaneamente para todos os outros
       const nowIso = new Date().toISOString();
-      const updatedDb: CongregationDatabase = {
+      unifiedDb = {
         ...database,
         lastUpdated: nowIso,
         syncMetadata: {
@@ -900,61 +1024,120 @@ export function App() {
           lastEditorDeviceName: device.deviceName,
           lastEditedAt: nowIso,
           lastEditedMeetingId: selectedMeetingId,
-          lastEditedDescription: 'Sincronização forçada em todos os aparelhos',
+          lastEditedDescription: 'Sincronização simultânea',
         },
       };
 
-      setDatabase(updatedDb);
-      saveDatabase(updatedDb);
+      lastServerUpdatedRef.current = nowIso;
+      setDatabase(unifiedDb);
+      saveDatabase(unifiedDb);
 
-      const ok = await sendDatabaseToServer(updatedDb);
+      const ok = await sendDatabaseToServer(unifiedDb);
       if (isFirebaseActive) {
-        for (const m of updatedDb.meetings) {
+        for (const m of unifiedDb.meetings) {
           await syncMeetingToFirestore(m).catch(() => {});
-          const mAtt = updatedDb.attendance[m.id] || {};
-          const mNotes = updatedDb.attendanceNotes?.[m.id] || {};
+          const mAtt = unifiedDb.attendance[m.id] || {};
+          const mNotes = unifiedDb.attendanceNotes?.[m.id] || {};
           await syncAttendanceToFirestore(m.id, mAtt, mNotes, {
             deviceId: device.deviceId,
             deviceName: device.deviceName,
-            description: 'Sincronização forçada',
+            description: 'Sincronização simultânea',
           }).catch(() => {});
         }
-        for (const p of updatedDb.publishers) {
+        for (const p of unifiedDb.publishers) {
           await syncPublisherToFirestore(p).catch(() => {});
         }
       }
 
       if (ok) {
-        showSnack('🔄 Sincronizado em todos os aparelhos!', false);
+        showSnack('✓ Sincronizado em todos os aparelhos!', false);
       } else {
         showSnack('⚠️ Sem conexão no momento. Salvo na fila.', false);
       }
     } catch (err) {
-      console.error('Erro ao forçar sincronização:', err);
+      console.error('Erro ao sincronizar aparelhos:', err);
       showSnack('Erro ao sincronizar aparelhos', false);
     } finally {
       setIsSyncingAttendance(false);
     }
   };
 
-  // FORÇAR ATUALIZAÇÃO DESTE APARELHO A PARTIR DO SERVIDOR CENTRAL
+  // Mantido para compatibilidade de props
   const handleForcePullSyncFromServer = async () => {
-    buzz();
-    await flushPendingQueue();
-    await handleRefreshAttendanceData(false);
-    showSnack('⬇️ Dados atualizados com a nuvem!', false);
+    await handleForcePushSyncAllDevices();
   };
 
-  // Sincronização e reconexão ativa em segundo plano para iPhone e iPad
+  // Loop de sincronização simultânea ultra-rápida (a cada 1 segundo) para iPhone, iPad, Android e PC
   useEffect(() => {
+    const myDeviceId = getDeviceInfo().deviceId;
+
+    const runFastPoll = async () => {
+      if (!isOnline || !isAutoPollActive) return;
+      if (inFlightMutationsRef.current > 0 || Date.now() - lastLocalMutationTimeRef.current < 1800) {
+        return;
+      }
+
+      const pollRes = await pollServerChanges(lastServerUpdatedRef.current);
+      if (!pollRes) return;
+
+      if (inFlightMutationsRef.current > 0 || Date.now() - lastLocalMutationTimeRef.current < 1800) {
+        return;
+      }
+
+      if (pollRes.connectedClients !== undefined) {
+        setConnectedDevicesCount(pollRes.connectedClients);
+        setIsServerConnected(true);
+      }
+
+      if (pollRes.changed && pollRes.database) {
+        const srv = pollRes.database;
+        lastServerUpdatedRef.current = pollRes.lastUpdated || srv.lastUpdated || '';
+
+        setDatabase((prev) => {
+          const nextDb: CongregationDatabase = {
+            ...prev,
+            ...srv,
+            congregationName: srv.congregationName || prev.congregationName,
+            publishers: Array.isArray(srv.publishers) ? srv.publishers : prev.publishers,
+            meetings: Array.isArray(srv.meetings) ? srv.meetings : prev.meetings,
+            attendance: srv.attendance || {},
+            attendanceNotes: srv.attendanceNotes || {},
+            shepherdingVisits: Array.isArray(srv.shepherdingVisits)
+              ? srv.shepherdingVisits
+              : prev.shepherdingVisits,
+            syncMetadata: srv.syncMetadata || prev.syncMetadata,
+            lastUpdated: srv.lastUpdated || pollRes.lastUpdated,
+          };
+          saveDatabase(nextDb);
+          return nextDb;
+        });
+
+        // Se outro aparelho selecionou/criou/editou uma reunião, acompanha simultaneamente
+        const remoteMid = srv.syncMetadata?.lastEditedMeetingId;
+        const remoteEditor = srv.syncMetadata?.lastEditorDeviceId;
+        if (
+          remoteMid &&
+          remoteEditor &&
+          remoteEditor !== myDeviceId &&
+          remoteMid !== lastSyncedRemoteMeetingRef.current &&
+          Date.now() - lastLocalMutationTimeRef.current > 5000 &&
+          Array.isArray(srv.meetings) &&
+          srv.meetings.some((m) => m.id === remoteMid)
+        ) {
+          lastSyncedRemoteMeetingRef.current = remoteMid;
+          setSelectedMeetingId(remoteMid);
+        }
+      }
+    };
+
     const handleVisibilityChange = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible' && isOnline) {
-        handleRefreshAttendanceData(true);
+        runFastPoll();
       }
     };
 
     const handleWindowFocus = () => {
-      if (isOnline) handleRefreshAttendanceData(true);
+      if (isOnline) runFastPoll();
     };
 
     if (typeof document !== 'undefined') {
@@ -966,10 +1149,8 @@ export function App() {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
         return;
       }
-      if (isOnline && isAutoPollActive) {
-        handleRefreshAttendanceData(true);
-      }
-    }, 12000);
+      runFastPoll();
+    }, 1000);
 
     return () => {
       if (typeof document !== 'undefined') {
@@ -978,7 +1159,7 @@ export function App() {
       window.removeEventListener('focus', handleWindowFocus);
       clearInterval(interval);
     };
-  }, [isOnline, isAutoPollActive, isFirebaseActive]);
+  }, [isOnline, isAutoPollActive]);
 
   // ALTERAÇÃO DIRETA DA DATA DA REUNIÃO
   const handleUpdateMeetingDate = (meetingId: string, newDate: string) => {
@@ -1062,6 +1243,7 @@ export function App() {
   };
 
   const handleDeleteMeeting = (meetingId: string) => {
+    lastLocalMutationTimeRef.current = Date.now();
     setDatabase((prev) => {
       const newMeetings = prev.meetings.filter((m) => m.id !== meetingId);
       const newAttendance = { ...prev.attendance };
@@ -1070,7 +1252,12 @@ export function App() {
       delete newAttendanceNotes[meetingId];
 
       if (isOnline) {
-        deleteMeetingOnServer(meetingId).catch(console.warn);
+        inFlightMutationsRef.current += 1;
+        deleteMeetingOnServer(meetingId)
+          .catch(console.warn)
+          .finally(() => {
+            inFlightMutationsRef.current = Math.max(0, inFlightMutationsRef.current - 1);
+          });
         if (isFirebaseActive) {
           deleteMeetingFromFirestore(meetingId).catch(console.warn);
         }
@@ -1095,6 +1282,7 @@ export function App() {
 
   // HANDLERS DE PUBLICADORES (PUBLISHERS)
   const handleSavePublisher = (publisher: Publisher) => {
+    lastLocalMutationTimeRef.current = Date.now();
     setDatabase((prev) => {
       const exists = prev.publishers.some((p) => p.id === publisher.id);
       const newPublishers = exists
@@ -1108,7 +1296,12 @@ export function App() {
       };
 
       if (isOnline) {
-        sendPublisherToServer(publisher).catch(() => enqueuePublisherSync(publisher));
+        inFlightMutationsRef.current += 1;
+        sendPublisherToServer(publisher)
+          .catch(() => enqueuePublisherSync(publisher))
+          .finally(() => {
+            inFlightMutationsRef.current = Math.max(0, inFlightMutationsRef.current - 1);
+          });
         if (isFirebaseActive) {
           syncPublisherToFirestore(publisher)
             .then((success) => {
@@ -1125,6 +1318,7 @@ export function App() {
   };
 
   const handleDeletePublisher = (publisherId: string) => {
+    lastLocalMutationTimeRef.current = Date.now();
     setDatabase((prev) => {
       const newPublishers = prev.publishers.filter((p) => p.id !== publisherId);
       const newAttendance = { ...prev.attendance };
@@ -1143,7 +1337,12 @@ export function App() {
       });
 
       if (isOnline) {
-        deletePublisherOnServer(publisherId).catch(console.warn);
+        inFlightMutationsRef.current += 1;
+        deletePublisherOnServer(publisherId)
+          .catch(console.warn)
+          .finally(() => {
+            inFlightMutationsRef.current = Math.max(0, inFlightMutationsRef.current - 1);
+          });
         if (isFirebaseActive) {
           deletePublisherFromFirestore(publisherId).catch(console.warn);
         }
@@ -1517,7 +1716,13 @@ export function App() {
           lastUpdated: nowIso,
         };
 
-        syncMeetingAttendanceAndNotes(meetingId, meetingAtt, meetingNotes, description);
+        syncMeetingAttendanceAndNotes(
+          meetingId,
+          meetingAtt,
+          meetingNotes,
+          description,
+          effectiveChanges
+        );
         saveDatabase(updatedDb);
         return updatedDb;
       });
@@ -1730,6 +1935,10 @@ export function App() {
       });
     }
 
+    lastLocalMutationTimeRef.current = Date.now();
+    const device = getDeviceInfo();
+    const nowIso = new Date().toISOString();
+
     setDatabase((prevDb) => {
       const updatedDb: CongregationDatabase = {
         ...prevDb,
@@ -1742,23 +1951,47 @@ export function App() {
           ...(prevDb.attendanceNotes || {}),
           [m.id]: initialNotes,
         },
-        lastUpdated: new Date().toISOString(),
+        syncMetadata: {
+          lastEditorDeviceId: device.deviceId,
+          lastEditorDeviceName: device.deviceName,
+          lastEditedAt: nowIso,
+          lastEditedMeetingId: m.id,
+          lastEditedDescription: 'Nova reunião criada',
+        },
+        lastUpdated: nowIso,
       };
       saveDatabase(updatedDb);
       return updatedDb;
     });
 
     if (isOnline) {
-      sendMeetingToServer(m).catch(() => enqueueMeetingSync(m));
+      inFlightMutationsRef.current += 1;
+      sendMeetingToServer(m, initialAtt, initialNotes)
+        .catch(() => {
+          enqueueMeetingSync(m);
+          if (Object.keys(initialAtt).length > 0) {
+            enqueueAttendanceSync(m.id, initialAtt, initialNotes);
+          }
+        })
+        .finally(() => {
+          inFlightMutationsRef.current = Math.max(0, inFlightMutationsRef.current - 1);
+        });
+
       if (isFirebaseActive) {
         syncMeetingToFirestore(m).catch(() => enqueueMeetingSync(m));
+        if (Object.keys(initialAtt).length > 0) {
+          syncAttendanceToFirestore(m.id, initialAtt, initialNotes, {
+            deviceId: device.deviceId,
+            deviceName: device.deviceName,
+            description: 'Nova reunião criada',
+          }).catch(() => {});
+        }
       }
     } else {
       enqueueMeetingSync(m);
-    }
-
-    if (Object.keys(initialAtt).length > 0) {
-      syncMeetingAttendanceAndNotes(m.id, initialAtt, initialNotes, 'Nova reunião criada');
+      if (Object.keys(initialAtt).length > 0) {
+        enqueueAttendanceSync(m.id, initialAtt, initialNotes);
+      }
     }
 
     setSelectedMeetingId(m.id);
@@ -2171,20 +2404,11 @@ export function App() {
           </div>
           <div
             className="badge cursor-pointer"
-            title="Abrir painel de sincronização entre aparelhos"
-            onClick={() => setIsSyncModalOpen(true)}
+            title="Toque para sincronizar todos os aparelhos agora"
+            onClick={handleForcePushSyncAllDevices}
           >
             {syncBadgeText}
           </div>
-          <button
-            className="ibtn"
-            onClick={handleForcePushSyncAllDevices}
-            disabled={isSyncingAttendance || isRefreshingAttendance}
-            title="Forçar sincronização em todos os aparelhos agora"
-            aria-label="Forçar sincronização em todos os aparelhos agora"
-          >
-            🔄
-          </button>
           <button className="ibtn" onClick={toggleTheme} title="Tema Claro / Escuro">
             🌓
           </button>
@@ -2322,13 +2546,7 @@ export function App() {
                 onClick={handleForcePushSyncAllDevices}
                 disabled={isSyncingAttendance || isRefreshingAttendance}
               >
-                🔄 Forçar sincronização
-              </button>
-              <button
-                className="chip"
-                onClick={() => setIsSyncModalOpen(true)}
-              >
-                ☁️ Sincronizar aparelhos
+                🔄 Sincronizar
               </button>
               {deferredInstallPrompt && (
                 <button

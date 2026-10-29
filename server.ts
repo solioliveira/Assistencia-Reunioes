@@ -41,21 +41,32 @@ try {
   currentDatabase = { ...INITIAL_DATABASE, lastUpdated: new Date().toISOString() };
 }
 
+let lastBackupSnapshotTime = 0;
+
 function persistDatabaseToDisk() {
   try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(currentDatabase, null, 2), 'utf-8');
+    const serialized = JSON.stringify(currentDatabase, null, 2);
+    fs.writeFileSync(DATA_FILE, serialized, 'utf-8');
 
-    // Snapshot automático de backup com rotação
-    const backupFile = path.join(BACKUP_DIR, `snapshot-${Date.now()}.json`);
-    fs.writeFileSync(backupFile, JSON.stringify(currentDatabase, null, 2), 'utf-8');
-
-    const files = fs.readdirSync(BACKUP_DIR).filter((f) => f.startsWith('snapshot-')).sort();
-    if (files.length > 50) {
-      for (let i = 0; i < files.length - 50; i++) {
+    // Snapshot automático de backup com rotação (máximo 1 snapshot a cada 30s para não bloquear I/O em tempo real)
+    const now = Date.now();
+    if (now - lastBackupSnapshotTime > 30000) {
+      lastBackupSnapshotTime = now;
+      setImmediate(() => {
         try {
-          fs.unlinkSync(path.join(BACKUP_DIR, files[i]));
+          const backupFile = path.join(BACKUP_DIR, `snapshot-${now}.json`);
+          fs.writeFileSync(backupFile, serialized, 'utf-8');
+
+          const files = fs.readdirSync(BACKUP_DIR).filter((f) => f.startsWith('snapshot-')).sort();
+          if (files.length > 50) {
+            for (let i = 0; i < files.length - 50; i++) {
+              try {
+                fs.unlinkSync(path.join(BACKUP_DIR, files[i]));
+              } catch {}
+            }
+          }
         } catch {}
-      }
+      });
     }
   } catch (err) {
     console.error('[Server] Falha ao persistir em disco:', err);
@@ -71,15 +82,19 @@ type SseClient = {
 };
 
 const sseClients = new Set<SseClient>();
+const SSE_FLUSH_PADDING = `: ${' '.repeat(2048)}\n\n`;
 
 function broadcastSseEvent(eventData: Record<string, any>, excludeDeviceId?: string) {
-  const payload = `data: ${JSON.stringify(eventData)}\n\n`;
+  const payload = `data: ${JSON.stringify(eventData)}\n\n${SSE_FLUSH_PADDING}`;
   for (const client of sseClients) {
     if (excludeDeviceId && client.deviceId === excludeDeviceId) {
       continue;
     }
     try {
       client.res.write(payload);
+      if (typeof (client.res as any).flush === 'function') {
+        (client.res as any).flush();
+      }
     } catch {
       sseClients.delete(client);
     }
@@ -92,6 +107,15 @@ async function startServer() {
   // Middlewares para parsing de JSON
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
+
+  // Desabilita qualquer cache HTTP nas rotas da API para garantir sincronismo simultâneo em iPhones/iPads/Android
+  app.use('/api', (req: Request, res: Response, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+    next();
+  });
 
   // ==========================================
   // API ROUTES
@@ -116,12 +140,31 @@ async function startServer() {
     });
   });
 
+  // 2b. Polling ultra-leve de 1 segundo para sincronismo simultâneo instantâneo
+  app.get('/api/sync/poll', (req: Request, res: Response) => {
+    const since = (req.query.since as string) || '';
+    const changed = !since || since !== currentDatabase.lastUpdated;
+    if (!changed) {
+      return res.json({
+        changed: false,
+        lastUpdated: currentDatabase.lastUpdated,
+        connectedClients: sseClients.size,
+      });
+    }
+    return res.json({
+      changed: true,
+      lastUpdated: currentDatabase.lastUpdated,
+      connectedClients: sseClients.size,
+      database: currentDatabase,
+    });
+  });
+
   // 3. Obter banco completo da congregação
   app.get('/api/database', (req: Request, res: Response) => {
     res.json(currentDatabase);
   });
 
-  // 4. Salvar banco completo ou mesclar
+  // 4. Salvar banco completo ou sincronizar simultaneamente todos os aparelhos
   app.post('/api/database', (req: Request, res: Response) => {
     try {
       const incoming = req.body as CongregationDatabase;
@@ -129,26 +172,34 @@ async function startServer() {
         return res.status(400).json({ error: 'Formato de banco inválido.' });
       }
 
-      currentDatabase = {
-        ...incoming,
-        lastUpdated: new Date().toISOString(),
-      };
-      persistDatabaseToDisk();
-
+      const nowIso = new Date().toISOString();
       const sourceDeviceId = req.body?.sourceDeviceId;
       const sourceDeviceName = req.body?.sourceDeviceName;
 
-      broadcastSseEvent(
-        {
-          type: 'database_updated',
-          database: currentDatabase,
-          sourceDeviceId,
-          sourceDeviceName,
+      currentDatabase = {
+        ...incoming,
+        lastUpdated: nowIso,
+        syncMetadata: incoming.syncMetadata || {
+          lastEditorDeviceId: sourceDeviceId || 'aparelho',
+          lastEditorDeviceName: sourceDeviceName || 'Aparelho',
+          lastEditedAt: nowIso,
+          lastEditedDescription: 'Sincronização completa',
         },
-        sourceDeviceId
-      );
+      };
+      persistDatabaseToDisk();
 
-      return res.json({ success: true, lastUpdated: currentDatabase.lastUpdated });
+      broadcastSseEvent({
+        type: 'database_updated',
+        database: currentDatabase,
+        sourceDeviceId,
+        sourceDeviceName,
+      });
+
+      return res.json({
+        success: true,
+        lastUpdated: currentDatabase.lastUpdated,
+        database: currentDatabase,
+      });
     } catch (err: any) {
       console.error('[Server] Erro ao salvar banco:', err);
       return res.status(500).json({ error: err.message || 'Erro ao salvar' });
@@ -296,12 +347,15 @@ async function startServer() {
     }
   });
 
-  // 5. Sincronização em tempo real de CHAMADA (Attendance)
+  // 5. Sincronização em tempo real de CHAMADA (Attendance) com suporte a mudanças atômicas simultâneas
   app.post('/api/sync/attendance', (req: Request, res: Response) => {
     try {
-      const { meetingId, attendanceMap, notesMap, editorInfo } = req.body;
-      if (!meetingId || !attendanceMap) {
-        return res.status(400).json({ error: 'meetingId e attendanceMap são obrigatórios.' });
+      const { meetingId, attendanceMap, attendance, notesMap, notes, changes, editorInfo } = req.body;
+      const incomingAtt = attendanceMap || attendance;
+      const incomingNotes = notesMap !== undefined ? notesMap : notes;
+
+      if (!meetingId || (!incomingAtt && !Array.isArray(changes))) {
+        return res.status(400).json({ error: 'meetingId e dados de chamada são obrigatórios.' });
       }
 
       const nowIso = new Date().toISOString();
@@ -309,13 +363,43 @@ async function startServer() {
       if (!currentDatabase.attendance) {
         currentDatabase.attendance = {};
       }
-      currentDatabase.attendance[meetingId] = attendanceMap;
+      if (!currentDatabase.attendanceNotes) {
+        currentDatabase.attendanceNotes = {};
+      }
 
-      if (notesMap !== undefined) {
-        if (!currentDatabase.attendanceNotes) {
-          currentDatabase.attendanceNotes = {};
+      // Se vier lista de alterações pontuais (changes), aplica de forma atômica preservando marcações simultâneas de outros aparelhos
+      if (Array.isArray(changes) && changes.length > 0) {
+        const curAtt = { ...(currentDatabase.attendance[meetingId] || {}) };
+        const curNotes = { ...(currentDatabase.attendanceNotes[meetingId] || {}) };
+
+        for (const ch of changes) {
+          if (!ch || !ch.pid) continue;
+          if (ch.st) {
+            curAtt[ch.pid] = ch.st;
+          } else if (ch.st === null) {
+            delete curAtt[ch.pid];
+          }
+          if (ch.note !== undefined) {
+            if (typeof ch.note === 'string' && ch.note.trim()) {
+              curNotes[ch.pid] = ch.note.trim();
+            } else {
+              delete curNotes[ch.pid];
+            }
+          }
+          if (ch.st !== undefined && ch.st !== 'zoom' && ch.st !== 'ausente' && !ch.pid.startsWith('__')) {
+            delete curNotes[ch.pid];
+          }
         }
-        currentDatabase.attendanceNotes[meetingId] = notesMap;
+
+        currentDatabase.attendance[meetingId] = curAtt;
+        currentDatabase.attendanceNotes[meetingId] = curNotes;
+      } else {
+        if (incomingAtt) {
+          currentDatabase.attendance[meetingId] = { ...incomingAtt };
+        }
+        if (incomingNotes !== undefined) {
+          currentDatabase.attendanceNotes[meetingId] = { ...incomingNotes };
+        }
       }
 
       const metadata: SyncMetadata = {
@@ -331,21 +415,31 @@ async function startServer() {
 
       persistDatabaseToDisk();
 
-      // Envia notificação instantânea para TODOS os outros aparelhos conectados via SSE
+      const finalAtt = currentDatabase.attendance[meetingId] || {};
+      const finalNotes = currentDatabase.attendanceNotes[meetingId] || {};
+
+      // Envia notificação instantânea para TODOS os aparelhos conectados via SSE
       broadcastSseEvent(
         {
           type: 'attendance_updated',
           meetingId,
-          attendance: attendanceMap,
-          notes: notesMap,
+          attendance: finalAtt,
+          notes: finalNotes,
           metadata,
+          lastUpdated: nowIso,
           sourceDeviceId: editorInfo?.deviceId,
           sourceDeviceName: editorInfo?.deviceName,
         },
         editorInfo?.deviceId
       );
 
-      return res.json({ success: true, metadata, lastUpdated: nowIso });
+      return res.json({
+        success: true,
+        metadata,
+        lastUpdated: nowIso,
+        attendance: finalAtt,
+        notes: finalNotes,
+      });
     } catch (err: any) {
       console.error('[Server] Erro na sincronização de chamada:', err);
       return res.status(500).json({ error: err.message || 'Erro ao sincronizar chamada' });
@@ -390,12 +484,13 @@ async function startServer() {
           publisher,
           publishers: currentDatabase.publishers,
           metadata: currentDatabase.syncMetadata,
+          lastUpdated: nowIso,
           sourceDeviceId: editorInfo?.deviceId,
         },
         editorInfo?.deviceId
       );
 
-      return res.json({ success: true, publisher });
+      return res.json({ success: true, publisher, lastUpdated: nowIso });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -408,7 +503,22 @@ async function startServer() {
       const editorDeviceId = req.query.deviceId as string | undefined;
 
       currentDatabase.publishers = currentDatabase.publishers.filter((p) => p.id !== pubId);
-      currentDatabase.lastUpdated = new Date().toISOString();
+      if (currentDatabase.attendance) {
+        Object.keys(currentDatabase.attendance).forEach((mid) => {
+          if (currentDatabase.attendance[mid]) {
+            delete currentDatabase.attendance[mid][pubId];
+          }
+        });
+      }
+      if (currentDatabase.attendanceNotes) {
+        Object.keys(currentDatabase.attendanceNotes).forEach((mid) => {
+          if (currentDatabase.attendanceNotes![mid]) {
+            delete currentDatabase.attendanceNotes![mid][pubId];
+          }
+        });
+      }
+      const nowIso = new Date().toISOString();
+      currentDatabase.lastUpdated = nowIso;
       persistDatabaseToDisk();
 
       broadcastSseEvent(
@@ -416,22 +526,25 @@ async function startServer() {
           type: 'publisher_deleted',
           publisherId: pubId,
           publishers: currentDatabase.publishers,
+          lastUpdated: nowIso,
           sourceDeviceId: editorDeviceId,
         },
         editorDeviceId
       );
 
-      return res.json({ success: true });
+      return res.json({ success: true, lastUpdated: nowIso });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
   });
 
-  // 8. Sincronização de Reunião (Criar / Editar)
+  // 8. Sincronização de Reunião (Criar / Editar) com presença inicial atômica
   app.post('/api/sync/meeting', (req: Request, res: Response) => {
     try {
-      const { meeting, editorInfo } = req.body as {
+      const { meeting, initialAttendance, initialNotes, editorInfo } = req.body as {
         meeting: Meeting;
+        initialAttendance?: Record<string, AttendanceStatus>;
+        initialNotes?: Record<string, string>;
         editorInfo?: { deviceId: string; deviceName: string };
       };
 
@@ -443,11 +556,27 @@ async function startServer() {
       if (index >= 0) {
         currentDatabase.meetings[index] = meeting;
       } else {
-        currentDatabase.meetings.push(meeting);
+        currentDatabase.meetings.unshift(meeting);
+      }
+
+      if (initialAttendance) {
+        if (!currentDatabase.attendance) currentDatabase.attendance = {};
+        currentDatabase.attendance[meeting.id] = { ...initialAttendance };
+      }
+      if (initialNotes) {
+        if (!currentDatabase.attendanceNotes) currentDatabase.attendanceNotes = {};
+        currentDatabase.attendanceNotes[meeting.id] = { ...initialNotes };
       }
 
       const nowIso = new Date().toISOString();
       currentDatabase.lastUpdated = nowIso;
+      currentDatabase.syncMetadata = {
+        lastEditorDeviceId: editorInfo?.deviceId || 'aparelho',
+        lastEditorDeviceName: editorInfo?.deviceName || 'Outro aparelho',
+        lastEditedAt: nowIso,
+        lastEditedMeetingId: meeting.id,
+        lastEditedDescription: `Reunião ${meeting.date} atualizada`,
+      };
       persistDatabaseToDisk();
 
       broadcastSseEvent(
@@ -455,12 +584,16 @@ async function startServer() {
           type: 'meeting_updated',
           meeting,
           meetings: currentDatabase.meetings,
+          attendance: currentDatabase.attendance,
+          attendanceNotes: currentDatabase.attendanceNotes,
+          metadata: currentDatabase.syncMetadata,
+          lastUpdated: nowIso,
           sourceDeviceId: editorInfo?.deviceId,
         },
         editorInfo?.deviceId
       );
 
-      return res.json({ success: true, meeting });
+      return res.json({ success: true, meeting, lastUpdated: nowIso });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -479,7 +612,8 @@ async function startServer() {
       if (currentDatabase.attendanceNotes) {
         delete currentDatabase.attendanceNotes[meetingId];
       }
-      currentDatabase.lastUpdated = new Date().toISOString();
+      const nowIso = new Date().toISOString();
+      currentDatabase.lastUpdated = nowIso;
       persistDatabaseToDisk();
 
       broadcastSseEvent(
@@ -487,12 +621,15 @@ async function startServer() {
           type: 'meeting_deleted',
           meetingId,
           meetings: currentDatabase.meetings,
+          attendance: currentDatabase.attendance,
+          attendanceNotes: currentDatabase.attendanceNotes,
+          lastUpdated: nowIso,
           sourceDeviceId: editorDeviceId,
         },
         editorDeviceId
       );
 
-      return res.json({ success: true });
+      return res.json({ success: true, lastUpdated: nowIso });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -521,19 +658,21 @@ async function startServer() {
         currentDatabase.shepherdingVisits.push(visit);
       }
 
-      currentDatabase.lastUpdated = new Date().toISOString();
+      const nowIso = new Date().toISOString();
+      currentDatabase.lastUpdated = nowIso;
       persistDatabaseToDisk();
 
       broadcastSseEvent(
         {
           type: 'shepherding_updated',
           visits: currentDatabase.shepherdingVisits,
+          lastUpdated: nowIso,
           sourceDeviceId: editorInfo?.deviceId,
         },
         editorInfo?.deviceId
       );
 
-      return res.json({ success: true, visit });
+      return res.json({ success: true, visit, lastUpdated: nowIso });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -541,10 +680,13 @@ async function startServer() {
 
   // 11. Endpoint SSE (Server-Sent Events) para sincronização em tempo real entre todos os aparelhos
   app.get('/api/sync/events', (req: Request, res: Response) => {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-store, no-transform, must-revalidate');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
+    if (typeof res.flushHeaders === 'function') {
+      res.flushHeaders();
+    }
 
     const clientId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const deviceId = (req.query.deviceId as string) || '';
@@ -553,14 +695,14 @@ async function startServer() {
     const newClient: SseClient = { id: clientId, res, deviceId, deviceName };
     sseClients.add(newClient);
 
-    // Envia evento inicial de confirmação
+    // Envia evento inicial de confirmação com padding para forçar flush no proxy
     res.write(
       `data: ${JSON.stringify({
         type: 'connected',
         connectedClients: sseClients.size,
         metadata: currentDatabase.syncMetadata,
         lastUpdated: currentDatabase.lastUpdated,
-      })}\n\n`
+      })}\n\n${SSE_FLUSH_PADDING}`
     );
 
     // Notifica outros sobre novo aparelho conectado
@@ -569,15 +711,15 @@ async function startServer() {
       connectedClients: sseClients.size,
     });
 
-    // Heartbeat a cada 15 segundos para evitar que conexões móveis caiam
+    // Heartbeat a cada 10 segundos para evitar que conexões móveis caiam
     const pingInterval = setInterval(() => {
       try {
-        res.write(': ping\n\n');
+        res.write(`: ping ${Date.now()}\n\n`);
       } catch {
         clearInterval(pingInterval);
         sseClients.delete(newClient);
       }
-    }, 15000);
+    }, 10000);
 
     req.on('close', () => {
       clearInterval(pingInterval);

@@ -14,6 +14,7 @@ export interface ServerSyncEventCallbacks {
     attendance: Record<string, AttendanceStatus>;
     notes?: Record<string, string>;
     metadata?: SyncMetadata;
+    lastUpdated?: string;
     sourceDeviceId?: string;
     sourceDeviceName?: string;
   }) => void;
@@ -24,10 +25,17 @@ export interface ServerSyncEventCallbacks {
   }) => void;
   onPublisherUpdated?: (data: {
     publishers: Publisher[];
+    lastUpdated?: string;
     sourceDeviceId?: string;
   }) => void;
   onMeetingUpdated?: (data: {
+    meeting?: Meeting;
+    meetingId?: string;
     meetings: Meeting[];
+    attendance?: Record<string, Record<string, AttendanceStatus>>;
+    attendanceNotes?: Record<string, Record<string, string>>;
+    metadata?: SyncMetadata;
+    lastUpdated?: string;
     sourceDeviceId?: string;
   }) => void;
   onPresenceChanged?: (connectedClients: number) => void;
@@ -66,6 +74,7 @@ export function subscribeToServerEvents(callbacks: ServerSyncEventCallbacks): ()
     const query = new URLSearchParams({
       deviceId: device.deviceId,
       deviceName: device.deviceName,
+      _t: String(Date.now()),
     }).toString();
 
     try {
@@ -106,18 +115,18 @@ export function subscribeToServerEvents(callbacks: ServerSyncEventCallbacks): ()
         es.close();
         activeEventSource = null;
 
-        // Tenta reconectar em 3 segundos
+        // Tenta reconectar em 2 segundos
         if (reconnectTimer) clearTimeout(reconnectTimer);
         reconnectTimer = setTimeout(() => {
           connect();
-        }, 3000);
+        }, 2000);
       };
     } catch (err) {
       console.warn('[SSE] Falha ao iniciar EventSource:', err);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(() => {
         connect();
-      }, 5000);
+      }, 3000);
     }
   }
 
@@ -134,12 +143,16 @@ export function subscribeToServerEvents(callbacks: ServerSyncEventCallbacks): ()
 }
 
 /**
- * Busca o banco mais atual da congregação no servidor
+ * Busca o banco mais atual da congregação no servidor (sem cache)
  */
 export async function fetchServerDatabase(): Promise<CongregationDatabase | null> {
   try {
-    const res = await fetch('/api/database', {
-      headers: { Accept: 'application/json' },
+    const res = await fetch(`/api/database?_t=${Date.now()}`, {
+      headers: {
+        Accept: 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
       cache: 'no-store',
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -152,23 +165,54 @@ export async function fetchServerDatabase(): Promise<CongregationDatabase | null
 }
 
 /**
- * Salva ou atualiza a chamada de uma reunião específica no servidor
+ * Polling rápido de 1 segundo para sincronismo simultâneo instantâneo entre todos os aparelhos
+ */
+export async function pollServerChanges(since: string): Promise<{
+  changed: boolean;
+  lastUpdated: string;
+  connectedClients?: number;
+  database?: CongregationDatabase;
+} | null> {
+  try {
+    const res = await fetch(
+      `/api/sync/poll?since=${encodeURIComponent(since || '')}&_t=${Date.now()}`,
+      {
+        headers: {
+          Accept: 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+        cache: 'no-store',
+      }
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Salva ou atualiza a chamada de uma reunião específica no servidor (com suporte a changes atômicos)
  */
 export async function sendAttendanceToServer(
   meetingId: string,
   attendanceMap: Record<string, AttendanceStatus>,
   notesMap?: Record<string, string>,
-  editorInfo?: { deviceId: string; deviceName: string; description?: string }
+  editorInfo?: { deviceId: string; deviceName: string; description?: string },
+  changes?: Array<{ pid: string; st: AttendanceStatus | null; note?: string }>
 ): Promise<boolean> {
   try {
     const device = editorInfo || getDeviceInfo();
     const res = await fetch('/api/sync/attendance', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({
         meetingId,
         attendanceMap,
         notesMap,
+        changes,
         editorInfo: {
           deviceId: device.deviceId,
           deviceName: device.deviceName,
@@ -192,6 +236,7 @@ export async function sendDatabaseToServer(database: CongregationDatabase): Prom
     const res = await fetch('/api/database', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({
         ...database,
         sourceDeviceId: device.deviceId,
@@ -214,6 +259,7 @@ export async function sendPublisherToServer(publisher: Publisher): Promise<boole
     const res = await fetch('/api/sync/publisher', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({
         publisher,
         editorInfo: {
@@ -237,6 +283,7 @@ export async function deletePublisherOnServer(publisherId: string): Promise<bool
     const device = getDeviceInfo();
     const res = await fetch(`/api/sync/publisher/${publisherId}?deviceId=${device.deviceId}`, {
       method: 'DELETE',
+      cache: 'no-store',
     });
     return res.ok;
   } catch (err) {
@@ -246,16 +293,23 @@ export async function deletePublisherOnServer(publisherId: string): Promise<bool
 }
 
 /**
- * Salva ou atualiza uma reunião no servidor
+ * Salva ou atualiza uma reunião no servidor (com presença inicial opcional)
  */
-export async function sendMeetingToServer(meeting: Meeting): Promise<boolean> {
+export async function sendMeetingToServer(
+  meeting: Meeting,
+  initialAttendance?: Record<string, AttendanceStatus>,
+  initialNotes?: Record<string, string>
+): Promise<boolean> {
   try {
     const device = getDeviceInfo();
     const res = await fetch('/api/sync/meeting', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify({
         meeting,
+        initialAttendance,
+        initialNotes,
         editorInfo: {
           deviceId: device.deviceId,
           deviceName: device.deviceName,
