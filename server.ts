@@ -83,6 +83,46 @@ type SseClient = {
 
 const sseClients = new Set<SseClient>();
 const SSE_FLUSH_PADDING = `: ${' '.repeat(2048)}\n\n`;
+const SERVER_BUILD_ID = `v4-${Date.now()}`;
+
+interface RequestLogEntry {
+  ts: string;
+  method: string;
+  url: string;
+  ua: string;
+  origin: string;
+}
+const recentRequestsLog: RequestLogEntry[] = [];
+
+function decodeBase64Json<T = any>(b64: string | undefined): T | null {
+  if (!b64) return null;
+  try {
+    const json = Buffer.from(b64, 'base64').toString('utf-8');
+    return JSON.parse(json) as T;
+  } catch {
+    return null;
+  }
+}
+
+function parseCompactAttendance(
+  compact: string | undefined
+): Record<string, AttendanceStatus | null> {
+  const result: Record<string, AttendanceStatus | null> = {};
+  if (!compact || typeof compact !== 'string') return result;
+  const pairs = compact.split(',');
+  for (const pair of pairs) {
+    if (!pair) continue;
+    const idx = pair.lastIndexOf(':');
+    if (idx <= 0) continue;
+    const pid = pair.slice(0, idx);
+    const code = pair.slice(idx + 1);
+    if (code === 'p' || code === 'presencial') result[pid] = 'presencial';
+    else if (code === 'z' || code === 'zoom') result[pid] = 'zoom';
+    else if (code === 'a' || code === 'ausente') result[pid] = 'ausente';
+    else if (code === '_' || code === 'null') result[pid] = null;
+  }
+  return result;
+}
 
 function broadcastSseEvent(eventData: Record<string, any>, excludeDeviceId?: string) {
   const payload = `data: ${JSON.stringify(eventData)}\n\n${SSE_FLUSH_PADDING}`;
@@ -108,12 +148,42 @@ async function startServer() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
 
-  // Desabilita qualquer cache HTTP nas rotas da API para garantir sincronismo simultâneo em iPhones/iPads/Android
+  // Desabilita qualquer cache HTTP e habilita CORS completo nas rotas da API para garantir sincronismo simultâneo em iPhones/iPads/Android
   app.use('/api', (req: Request, res: Response, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+    } else {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Accept, Cache-Control, Pragma, Authorization, X-Requested-With'
+    );
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
+
+    if (req.path !== '/sync/poll' && req.path !== '/debug/logs') {
+      recentRequestsLog.push({
+        ts: new Date().toISOString(),
+        method: req.method,
+        url: req.originalUrl.slice(0, 180),
+        ua: String(req.headers['user-agent'] || '').slice(0, 80),
+        origin: String(req.headers.origin || req.headers.referer || '').slice(0, 80),
+      });
+      if (recentRequestsLog.length > 60) {
+        recentRequestsLog.shift();
+      }
+    }
+
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
     next();
   });
 
@@ -177,9 +247,23 @@ if ('serviceWorker' in navigator) {
   app.get('/api/health', (req: Request, res: Response) => {
     res.json({
       status: 'ok',
+      buildId: SERVER_BUILD_ID,
       timestamp: new Date().toISOString(),
       connectedClients: sseClients.size,
       meetingsCount: currentDatabase.meetings?.length || 0,
+      lastUpdated: currentDatabase.lastUpdated,
+    });
+  });
+
+  app.get('/api/debug/logs', (req: Request, res: Response) => {
+    res.json({
+      buildId: SERVER_BUILD_ID,
+      connectedClients: sseClients.size,
+      meetingsCount: currentDatabase.meetings?.length || 0,
+      meetingIds: (currentDatabase.meetings || []).map((m) => m.id),
+      deletedMeetingIds: currentDatabase.deletedMeetingIds || [],
+      lastUpdated: currentDatabase.lastUpdated,
+      recentRequests: recentRequestsLog,
     });
   });
 
@@ -187,6 +271,7 @@ if ('serviceWorker' in navigator) {
   app.get('/api/sync/status', (req: Request, res: Response) => {
     res.json({
       success: true,
+      buildId: SERVER_BUILD_ID,
       connectedClients: sseClients.size,
       lastUpdated: currentDatabase.lastUpdated,
       meetingsCount: currentDatabase.meetings?.length || 0,
@@ -211,6 +296,7 @@ if ('serviceWorker' in navigator) {
     if (!changed) {
       return res.json({
         changed: false,
+        buildId: SERVER_BUILD_ID,
         lastUpdated: currentDatabase.lastUpdated,
         connectedClients: sseClients.size,
         meetingsCount: serverMeetingsCount,
@@ -218,12 +304,282 @@ if ('serviceWorker' in navigator) {
     }
     return res.json({
       changed: true,
+      buildId: SERVER_BUILD_ID,
       lastUpdated: currentDatabase.lastUpdated,
       connectedClients: sseClients.size,
       meetingsCount: serverMeetingsCount,
       database: currentDatabase,
     });
   });
+
+  // 2c. Endpoint GET/POST resiliente (/api/sync/push-op) imune a redirecionamentos 302 de proxies mobile
+  const handlePushOp = (req: Request, res: Response) => {
+    try {
+      const params = { ...(req.query as Record<string, string>), ...(req.body || {}) };
+      const op = params.op;
+      const did = params.did || 'aparelho';
+      const dnm = params.dnm || 'Aparelho';
+      const nowIso = new Date().toISOString();
+
+      if (op === 'meet') {
+        const meeting = decodeBase64Json<Meeting>(params.m);
+        if (!meeting || !meeting.id || !meeting.date) {
+          return res.status(400).json({ error: 'Reunião inválida em push-op.' });
+        }
+
+        if (Array.isArray(currentDatabase.deletedMeetingIds)) {
+          currentDatabase.deletedMeetingIds = currentDatabase.deletedMeetingIds.filter(
+            (id) => id !== meeting.id
+          );
+        }
+
+        const idx = currentDatabase.meetings.findIndex((m) => m.id === meeting.id);
+        if (idx >= 0) {
+          currentDatabase.meetings[idx] = { ...currentDatabase.meetings[idx], ...meeting };
+        } else {
+          currentDatabase.meetings.unshift(meeting);
+        }
+        currentDatabase.meetings.sort((a, b) =>
+          String(b.date || '').localeCompare(String(a.date || ''))
+        );
+
+        if (params.a !== undefined) {
+          const parsedAtt = parseCompactAttendance(params.a);
+          if (!currentDatabase.attendance) currentDatabase.attendance = {};
+          const nextAtt: Record<string, AttendanceStatus> = {
+            ...(currentDatabase.attendance[meeting.id] || {}),
+          };
+          for (const [pid, st] of Object.entries(parsedAtt)) {
+            if (st) nextAtt[pid] = st;
+            else delete nextAtt[pid];
+          }
+          currentDatabase.attendance[meeting.id] = nextAtt;
+        }
+
+        if (params.n !== undefined) {
+          const parsedNotes = decodeBase64Json<Record<string, string>>(params.n);
+          if (parsedNotes && typeof parsedNotes === 'object') {
+            if (!currentDatabase.attendanceNotes) currentDatabase.attendanceNotes = {};
+            currentDatabase.attendanceNotes[meeting.id] = {
+              ...(currentDatabase.attendanceNotes[meeting.id] || {}),
+              ...parsedNotes,
+            };
+          }
+        }
+
+        currentDatabase.lastUpdated = nowIso;
+        currentDatabase.syncMetadata = {
+          lastEditorDeviceId: did,
+          lastEditorDeviceName: dnm,
+          lastEditedAt: nowIso,
+          lastEditedMeetingId: meeting.id,
+          lastEditedDescription: `Reunião ${meeting.date} sincronizada`,
+        };
+        persistDatabaseToDisk();
+
+        broadcastSseEvent(
+          {
+            type: 'meeting_updated',
+            meeting,
+            meetings: currentDatabase.meetings,
+            deletedMeetingIds: currentDatabase.deletedMeetingIds,
+            attendance: currentDatabase.attendance,
+            attendanceNotes: currentDatabase.attendanceNotes,
+            metadata: currentDatabase.syncMetadata,
+            lastUpdated: nowIso,
+            sourceDeviceId: did,
+          },
+          did
+        );
+
+        return res.json({
+          success: true,
+          lastUpdated: nowIso,
+          meetingsCount: currentDatabase.meetings.length,
+        });
+      }
+
+      if (op === 'att') {
+        const mid = params.mid;
+        if (!mid) {
+          return res.status(400).json({ error: 'mid obrigatório em op=att.' });
+        }
+        const mode = params.mode || 'full';
+        const parsedAtt = parseCompactAttendance(params.a);
+        const parsedNotes = decodeBase64Json<Record<string, string>>(params.n);
+
+        if (!currentDatabase.attendance) currentDatabase.attendance = {};
+        if (!currentDatabase.attendanceNotes) currentDatabase.attendanceNotes = {};
+
+        if (mode === 'delta') {
+          const curAtt = { ...(currentDatabase.attendance[mid] || {}) };
+          for (const [pid, st] of Object.entries(parsedAtt)) {
+            if (st) curAtt[pid] = st;
+            else delete curAtt[pid];
+          }
+          currentDatabase.attendance[mid] = curAtt;
+
+          if (parsedNotes && typeof parsedNotes === 'object') {
+            const curNotes = { ...(currentDatabase.attendanceNotes[mid] || {}) };
+            for (const [pid, note] of Object.entries(parsedNotes)) {
+              if (note && note.trim()) curNotes[pid] = note.trim();
+              else delete curNotes[pid];
+            }
+            currentDatabase.attendanceNotes[mid] = curNotes;
+          }
+        } else {
+          const nextAtt: Record<string, AttendanceStatus> = {};
+          for (const [pid, st] of Object.entries(parsedAtt)) {
+            if (st) nextAtt[pid] = st;
+          }
+          currentDatabase.attendance[mid] = nextAtt;
+          if (parsedNotes && typeof parsedNotes === 'object') {
+            currentDatabase.attendanceNotes[mid] = { ...parsedNotes };
+          }
+        }
+
+        const metadata: SyncMetadata = {
+          lastEditorDeviceId: did,
+          lastEditorDeviceName: dnm,
+          lastEditedAt: nowIso,
+          lastEditedMeetingId: mid,
+          lastEditedDescription: params.desc || 'Chamada atualizada',
+        };
+        currentDatabase.syncMetadata = metadata;
+        currentDatabase.lastUpdated = nowIso;
+        persistDatabaseToDisk();
+
+        broadcastSseEvent(
+          {
+            type: 'attendance_updated',
+            meetingId: mid,
+            attendance: currentDatabase.attendance[mid] || {},
+            notes: currentDatabase.attendanceNotes[mid] || {},
+            metadata,
+            lastUpdated: nowIso,
+            sourceDeviceId: did,
+            sourceDeviceName: dnm,
+          },
+          did
+        );
+
+        return res.json({
+          success: true,
+          lastUpdated: nowIso,
+          metadata,
+        });
+      }
+
+      if (op === 'del_meet') {
+        const mid = params.mid;
+        if (!mid) return res.status(400).json({ error: 'mid obrigatório.' });
+        currentDatabase.deletedMeetingIds = Array.from(
+          new Set([...(currentDatabase.deletedMeetingIds || []), mid])
+        );
+        currentDatabase.meetings = currentDatabase.meetings.filter((m) => m.id !== mid);
+        if (currentDatabase.attendance) delete currentDatabase.attendance[mid];
+        if (currentDatabase.attendanceNotes) delete currentDatabase.attendanceNotes[mid];
+        currentDatabase.lastUpdated = nowIso;
+        persistDatabaseToDisk();
+
+        broadcastSseEvent(
+          {
+            type: 'meeting_deleted',
+            meetingId: mid,
+            meetings: currentDatabase.meetings,
+            deletedMeetingIds: currentDatabase.deletedMeetingIds,
+            attendance: currentDatabase.attendance,
+            attendanceNotes: currentDatabase.attendanceNotes,
+            lastUpdated: nowIso,
+            sourceDeviceId: did,
+          },
+          did
+        );
+
+        return res.json({
+          success: true,
+          lastUpdated: nowIso,
+          meetingsCount: currentDatabase.meetings.length,
+        });
+      }
+
+      if (op === 'pub') {
+        const publisher = decodeBase64Json<Publisher>(params.p);
+        if (!publisher || !publisher.id || !publisher.name) {
+          return res.status(400).json({ error: 'Publicador inválido.' });
+        }
+        if (Array.isArray(currentDatabase.deletedPublisherIds)) {
+          currentDatabase.deletedPublisherIds = currentDatabase.deletedPublisherIds.filter(
+            (id) => id !== publisher.id
+          );
+        }
+        const idx = currentDatabase.publishers.findIndex((p) => p.id === publisher.id);
+        if (idx >= 0) {
+          currentDatabase.publishers[idx] = { ...currentDatabase.publishers[idx], ...publisher };
+        } else {
+          currentDatabase.publishers.push(publisher);
+        }
+        currentDatabase.lastUpdated = nowIso;
+        persistDatabaseToDisk();
+
+        broadcastSseEvent(
+          {
+            type: 'publisher_updated',
+            publisher,
+            publishers: currentDatabase.publishers,
+            deletedPublisherIds: currentDatabase.deletedPublisherIds,
+            lastUpdated: nowIso,
+            sourceDeviceId: did,
+          },
+          did
+        );
+
+        return res.json({ success: true, lastUpdated: nowIso });
+      }
+
+      if (op === 'del_pub') {
+        const pid = params.pid;
+        if (!pid) return res.status(400).json({ error: 'pid obrigatório.' });
+        currentDatabase.deletedPublisherIds = Array.from(
+          new Set([...(currentDatabase.deletedPublisherIds || []), pid])
+        );
+        currentDatabase.publishers = currentDatabase.publishers.filter((p) => p.id !== pid);
+        if (currentDatabase.attendance) {
+          Object.keys(currentDatabase.attendance).forEach((mid) => {
+            if (currentDatabase.attendance[mid]) delete currentDatabase.attendance[mid][pid];
+          });
+        }
+        if (currentDatabase.attendanceNotes) {
+          Object.keys(currentDatabase.attendanceNotes).forEach((mid) => {
+            if (currentDatabase.attendanceNotes![mid]) delete currentDatabase.attendanceNotes![mid][pid];
+          });
+        }
+        currentDatabase.lastUpdated = nowIso;
+        persistDatabaseToDisk();
+
+        broadcastSseEvent(
+          {
+            type: 'publisher_deleted',
+            publisherId: pid,
+            publishers: currentDatabase.publishers,
+            deletedPublisherIds: currentDatabase.deletedPublisherIds,
+            lastUpdated: nowIso,
+            sourceDeviceId: did,
+          },
+          did
+        );
+
+        return res.json({ success: true, lastUpdated: nowIso });
+      }
+
+      return res.status(400).json({ error: 'Operação desconhecida.' });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Erro em push-op' });
+    }
+  };
+
+  app.get('/api/sync/push-op', handlePushOp);
+  app.post('/api/sync/push-op', handlePushOp);
 
   // 3. Obter banco completo da congregação
   app.get('/api/database', (req: Request, res: Response) => {

@@ -217,6 +217,58 @@ async function apiFetchJson<T = any>(
   return null;
 }
 
+let initialServerBuildId: string | null = null;
+
+function encodeBase64Json(obj: unknown): string {
+  try {
+    const json = JSON.stringify(obj);
+    const bytes = new TextEncoder().encode(json);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  } catch {
+    return '';
+  }
+}
+
+function encodeCompactAttendance(
+  attMap: Record<string, AttendanceStatus | null> | undefined
+): string {
+  if (!attMap) return '';
+  const parts: string[] = [];
+  for (const [pid, st] of Object.entries(attMap)) {
+    if (!pid) continue;
+    const code =
+      st === 'presencial'
+        ? 'p'
+        : st === 'zoom'
+        ? 'z'
+        : st === 'ausente'
+        ? 'a'
+        : '_';
+    parts.push(`${pid}:${code}`);
+  }
+  return parts.join(',');
+}
+
+async function pushOpViaGet(params: Record<string, string>): Promise<boolean> {
+  const device = getDeviceInfo();
+  const query = new URLSearchParams({
+    ...params,
+    did: params.did || device.deviceId,
+    dnm: params.dnm || device.deviceName,
+  });
+  const res = await apiFetchJson<{ success?: boolean }>(
+    `/api/sync/push-op?${query.toString()}`,
+    { method: 'GET' },
+    true,
+    2
+  );
+  return Boolean(res && res.success);
+}
+
 /**
  * Busca o banco mais atual da congregação no servidor (sem cache)
  */
@@ -237,6 +289,7 @@ export async function pollServerChanges(
   publishersCount?: number
 ): Promise<{
   changed: boolean;
+  buildId?: string;
   lastUpdated: string;
   connectedClients?: number;
   meetingsCount?: number;
@@ -251,16 +304,35 @@ export async function pollServerChanges(
   if (typeof publishersCount === 'number' && publishersCount >= 0) {
     params.set('pc', String(publishersCount));
   }
-  return await apiFetchJson(
-    `/api/sync/poll?${params.toString()}`,
-    { method: 'GET' },
-    false,
-    1
-  );
+  const res = await apiFetchJson<{
+    changed: boolean;
+    buildId?: string;
+    lastUpdated: string;
+    connectedClients?: number;
+    meetingsCount?: number;
+    database?: CongregationDatabase;
+  }>(`/api/sync/poll?${params.toString()}`, { method: 'GET' }, false, 1);
+
+  if (res && res.buildId) {
+    if (!initialServerBuildId) {
+      initialServerBuildId = res.buildId;
+    } else if (initialServerBuildId !== res.buildId) {
+      initialServerBuildId = res.buildId;
+      if (typeof window !== 'undefined') {
+        const lastBuildReload = Number(sessionStorage.getItem('jw_build_reload_ts') || '0');
+        if (Date.now() - lastBuildReload > 15000) {
+          sessionStorage.setItem('jw_build_reload_ts', String(Date.now()));
+          window.location.reload();
+        }
+      }
+    }
+  }
+
+  return res;
 }
 
 /**
- * Salva ou atualiza a chamada de uma reunião específica no servidor (com suporte a changes atômicos)
+ * Salva ou atualiza a chamada de uma reunião específica no servidor (com suporte a changes atômicos + fallback GET)
  */
 export async function sendAttendanceToServer(
   meetingId: string,
@@ -288,9 +360,42 @@ export async function sendAttendanceToServer(
       }),
     },
     true,
-    3
+    1
   );
-  return Boolean(data && data.success);
+  if (data && data.success) {
+    return true;
+  }
+
+  // Fallback GET imune a proxy 302
+  if (Array.isArray(changes) && changes.length > 0 && changes.length <= 40) {
+    const deltaAtt: Record<string, AttendanceStatus | null> = {};
+    const deltaNotes: Record<string, string> = {};
+    for (const ch of changes) {
+      deltaAtt[ch.pid] = ch.st;
+      if (ch.note !== undefined) deltaNotes[ch.pid] = ch.note;
+    }
+    return await pushOpViaGet({
+      op: 'att',
+      mid: meetingId,
+      mode: 'delta',
+      a: encodeCompactAttendance(deltaAtt),
+      n: Object.keys(deltaNotes).length > 0 ? encodeBase64Json(deltaNotes) : '',
+      did: device.deviceId,
+      dnm: device.deviceName,
+      desc: editorInfo?.description || 'Chamada atualizada',
+    });
+  }
+
+  return await pushOpViaGet({
+    op: 'att',
+    mid: meetingId,
+    mode: 'full',
+    a: encodeCompactAttendance(attendanceMap),
+    n: notesMap && Object.keys(notesMap).length > 0 ? encodeBase64Json(notesMap) : '',
+    did: device.deviceId,
+    dnm: device.deviceName,
+    desc: editorInfo?.description || 'Chamada atualizada',
+  });
 }
 
 /**
@@ -316,12 +421,75 @@ export async function sendDatabaseToServer(
       }),
     },
     true,
-    3
+    1
   );
   if (data && data.success) {
     return data.database || database;
   }
-  return null;
+
+  // Fallback resiliente via GET /api/sync/push-op caso POST grande seja bloqueado/redirecionado pelo proxy
+  try {
+    const srvDb = await fetchServerDatabase();
+    const srvDelMeets = new Set(srvDb?.deletedMeetingIds || []);
+    const srvDelPubs = new Set(srvDb?.deletedPublisherIds || []);
+
+    // 1. Sincroniza exclusões de reuniões locais
+    for (const delMid of database.deletedMeetingIds || []) {
+      if (!srvDelMeets.has(delMid)) {
+        await pushOpViaGet({ op: 'del_meet', mid: delMid });
+      }
+    }
+
+    // 2. Sincroniza exclusões de publicadores locais
+    for (const delPid of database.deletedPublisherIds || []) {
+      if (!srvDelPubs.has(delPid)) {
+        await pushOpViaGet({ op: 'del_pub', pid: delPid });
+      }
+    }
+
+    // 3. Sincroniza reuniões e presenças que faltam ou mudaram no servidor
+    const srvMeetsMap = new Map((srvDb?.meetings || []).map((m) => [m.id, m]));
+    for (const m of database.meetings || []) {
+      if (srvDelMeets.has(m.id)) continue;
+      const localAtt = database.attendance?.[m.id] || {};
+      const localNotes = database.attendanceNotes?.[m.id] || {};
+      const srvAtt = srvDb?.attendance?.[m.id] || {};
+      const srvNotes = srvDb?.attendanceNotes?.[m.id] || {};
+
+      const isMissingOnServer = !srvMeetsMap.has(m.id);
+      const attDiffers =
+        JSON.stringify(localAtt) !== JSON.stringify(srvAtt) ||
+        JSON.stringify(localNotes) !== JSON.stringify(srvNotes);
+
+      if (isMissingOnServer || attDiffers) {
+        await pushOpViaGet({
+          op: 'meet',
+          m: encodeBase64Json(m),
+          a: encodeCompactAttendance(localAtt),
+          n: Object.keys(localNotes).length > 0 ? encodeBase64Json(localNotes) : '',
+        });
+      }
+    }
+
+    // 4. Sincroniza publicadores novos ou editados (ex: telefone adicionado)
+    const srvPubsMap = new Map((srvDb?.publishers || []).map((p) => [p.id, p]));
+    for (const p of database.publishers || []) {
+      if (srvDelPubs.has(p.id)) continue;
+      const srvP = srvPubsMap.get(p.id);
+      if (!srvP || JSON.stringify(srvP) !== JSON.stringify(p)) {
+        await pushOpViaGet({
+          op: 'pub',
+          p: encodeBase64Json(p),
+        });
+      }
+    }
+
+    const updatedSrvDb = await fetchServerDatabase();
+    return updatedSrvDb || database;
+  } catch (err) {
+    console.warn('[ServerSync] Erro no fallback GET de sendDatabaseToServer:', err);
+    return null;
+  }
 }
 
 /**
@@ -343,9 +511,14 @@ export async function sendPublisherToServer(publisher: Publisher): Promise<boole
       }),
     },
     true,
-    3
+    1
   );
-  return Boolean(data && data.success);
+  if (data && data.success) return true;
+
+  return await pushOpViaGet({
+    op: 'pub',
+    p: encodeBase64Json(publisher),
+  });
 }
 
 /**
@@ -361,9 +534,14 @@ export async function deletePublisherOnServer(publisherId: string): Promise<bool
       body: JSON.stringify({ deviceId: device.deviceId }),
     },
     true,
-    3
+    1
   );
-  return Boolean(data && data.success);
+  if (data && data.success) return true;
+
+  return await pushOpViaGet({
+    op: 'del_pub',
+    pid: publisherId,
+  });
 }
 
 /**
@@ -391,9 +569,16 @@ export async function sendMeetingToServer(
       }),
     },
     true,
-    3
+    1
   );
-  return Boolean(data && data.success);
+  if (data && data.success) return true;
+
+  return await pushOpViaGet({
+    op: 'meet',
+    m: encodeBase64Json(meeting),
+    a: initialAttendance ? encodeCompactAttendance(initialAttendance) : '',
+    n: initialNotes && Object.keys(initialNotes).length > 0 ? encodeBase64Json(initialNotes) : '',
+  });
 }
 
 /**
@@ -409,9 +594,14 @@ export async function deleteMeetingOnServer(meetingId: string): Promise<boolean>
       body: JSON.stringify({ deviceId: device.deviceId }),
     },
     true,
-    3
+    1
   );
-  return Boolean(data && data.success);
+  if (data && data.success) return true;
+
+  return await pushOpViaGet({
+    op: 'del_meet',
+    mid: meetingId,
+  });
 }
 
 /**
@@ -433,7 +623,7 @@ export async function sendShepherdingToServer(visit: ShepherdingVisit): Promise<
       }),
     },
     true,
-    3
+    2
   );
   return Boolean(data && data.success);
 }

@@ -804,3 +804,108 @@ button {
   margin: 0 0 8px;
 }
 
+.claude-app .sheet.sheet-wide {
+  max-width: 820px;
+}
+
+.claude-app .abs-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: color-mix(in srgb, var(--aus) 10%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--aus) 35%, var(--line));
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  margin-bottom: 8px;
+}
+
+.claude-app .abs-card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 10px;
+  transition: border-color 0.15s;
+}
+
+.claude-app .abs-card.contacted {
+  border-color: color-mix(in srgb, var(--pres) 50%, var(--line));
+  background: color-mix(in srgb, var(--pres) 6%, var(--bg));
+}
+
+.claude-app .btn-wa {
+  background: #1fa855;
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  min-height: 42px;
+  padding: 0 12px;
+  font-weight: 600;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.claude-app .btn-call {
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  min-height: 42px;
+  padding: 0 12px;
+  font-weight: 600;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.claude-app .btn-sms {
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  min-height: 42px;
+  padding: 0 10px;
+  font-weight: 600;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-decoration: none;
+}
+
+.claude-app .phone-inline-input {
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  min-height: 40px;
+  font-size: 14px;
+  width: 100%;
+}
+
+.claude-app .msg-template-box {
+  width: 100%;
+  min-height: 74px;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+

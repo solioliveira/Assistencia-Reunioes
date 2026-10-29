@@ -85,10 +85,10 @@ export const SyncDevicesModal: React.FC<SyncDevicesModalProps> = ({
 
   const getShareableAppUrl = () => {
     if (storedConfig && storedConfig.apiKey && storedConfig.projectId) {
-      return encodeFirebaseConfigToLink(storedConfig);
+      return encodeFirebaseConfigToLink(storedConfig).replace('://ais-dev-', '://ais-pre-');
     }
     if (typeof window !== 'undefined') {
-      return window.location.href.split('#')[0];
+      return window.location.href.split('#')[0].replace('://ais-dev-', '://ais-pre-');
     }
     return '';
   };
@@ -99,18 +99,20 @@ export const SyncDevicesModal: React.FC<SyncDevicesModalProps> = ({
       navigator.clipboard.writeText(link).then(() => {
         setCopiedLink(true);
         setTimeout(() => setCopiedLink(false), 3000);
-      }).catch(() => {
-        prompt('Copie o link do aplicativo:', link);
-      });
-    } else {
-      prompt('Copie o link do aplicativo:', link);
+      }).catch(() => {});
     }
   };
 
   const handleOpenWhatsApp = () => {
     const link = getShareableAppUrl();
     const text = `Irmão, aqui está o link do aplicativo de chamada da nossa congregação:\n${link}`;
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    const a = document.createElement('a');
+    a.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   const handleCopyPairingCode = () => {

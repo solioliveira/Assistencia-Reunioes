@@ -205,6 +205,7 @@ interface ImportRowPreview {
   name: string;
   g: number;
   fam: string;
+  phone?: string;
   active: boolean;
 }
 
@@ -213,6 +214,7 @@ type SheetType =
   | { type: 'newMeeting' }
   | { type: 'delMeeting'; mid: string }
   | { type: 'manageMeetings' }
+  | { type: 'absenteesSheet' }
   | { type: 'reason'; pid: string }
   | { type: 'finish' }
   | { type: 'reopen' }
@@ -1642,11 +1644,29 @@ export function App() {
   const [editPubGroup, setEditPubGroup] = useState<string>('1');
   const [editPubNewGroup, setEditPubNewGroup] = useState<string>('');
   const [editPubFamily, setEditPubFamily] = useState<string>('');
+  const [editPubPhone, setEditPubPhone] = useState<string>('');
   const [editPubActive, setEditPubActive] = useState<boolean>(true);
   const [editPubError, setEditPubError] = useState<string>('');
 
   const [editCongNameInput, setEditCongNameInput] = useState<string>('');
   const [editCongError, setEditCongError] = useState<string>('');
+
+  // Estados da Planilha de Quem Faltou (Acompanhamento / Mensagem / Ligação)
+  const [absFilterTab, setAbsFilterTab] = useState<'ausentes' | 'streaks' | 'zoom' | 'unmarked'>(
+    'ausentes'
+  );
+  const [absGroupFilter, setAbsGroupFilter] = useState<string>('all');
+  const [absSearch, setAbsSearch] = useState<string>('');
+  const [showMsgTemplateEditor, setShowMsgTemplateEditor] = useState<boolean>(false);
+  const [absMessageTemplate, setAbsMessageTemplate] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('jw_abs_msg_template_v1');
+      if (saved && saved.trim()) return saved;
+    } catch {}
+    return 'Olá, irmão(ã) {nome}! Tudo bem com você? Sentimos sua falta na reunião de {data} ({dia}). Está tudo bem com você e sua família? Precisa de alguma ajuda?';
+  });
+  const [inlinePhones, setInlinePhones] = useState<Record<string, string>>({});
+  const [editingPhonePubId, setEditingPhonePubId] = useState<string | null>(null);
 
   // PWA install prompt
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
@@ -2156,6 +2176,7 @@ export function App() {
     setEditPubGroup(String(p ? p.group : groupsList[0] || 1));
     setEditPubNewGroup('');
     setEditPubFamily(p?.familyName || '');
+    setEditPubPhone(p?.phone || '');
     setEditPubActive(p ? p.active !== false : true);
     setEditPubError('');
     setActiveSheet({ type: 'editPub', pid });
@@ -2192,7 +2213,7 @@ export function App() {
       name: cleanName,
       group: grpNum,
       roles: existing?.roles?.length ? existing.roles : ['Publicador Batizado'],
-      phone: existing?.phone,
+      phone: editPubPhone.trim() || undefined,
       notes: existing?.notes,
       active: editPubActive,
       familyName: editPubFamily.trim() || undefined,
@@ -2204,9 +2225,228 @@ export function App() {
     showSnack(`${cleanName} salvo (Grupo ${grpNum})`, false);
   };
 
+  // Helpers da Planilha de Quem Faltou (Mensagem / Ligação / Excel)
+  const formatPhoneForWhatsApp = useCallback((rawPhone?: string): string => {
+    const digits = String(rawPhone || '').replace(/\D+/g, '');
+    if (!digits) return '';
+    const trimmed = digits.replace(/^0+/, '');
+    if (trimmed.length === 10 || trimmed.length === 11) {
+      return `55${trimmed}`;
+    }
+    return trimmed;
+  }, []);
+
+  const formatPhoneForCall = useCallback((rawPhone?: string): string => {
+    return String(rawPhone || '').replace(/[^\d+]+/g, '');
+  }, []);
+
+  const buildPersonalizedMessage = useCallback(
+    (pub: Publisher, meeting: Meeting | null): string => {
+      const m = meeting || currentMeeting;
+      const dateFormatted = m ? fmtDate(m.date) : fmtDate(todayISO());
+      const dow = m ? m.dayOfWeek || getPortugueseDayOfWeek(m.date) : '';
+      const firstName = pub.name.trim().split(/\s+/)[0] || pub.name;
+      return absMessageTemplate
+        .replace(/\{nome\}/gi, pub.name)
+        .replace(/\{primeiro_nome\}/gi, firstName)
+        .replace(/\{data\}/gi, dateFormatted)
+        .replace(/\{dia\}/gi, dow);
+    },
+    [absMessageTemplate, currentMeeting]
+  );
+
+  const handleUpdateAbsMessageTemplate = (nextTemplate: string) => {
+    setAbsMessageTemplate(nextTemplate);
+    try {
+      localStorage.setItem('jw_abs_msg_template_v1', nextTemplate);
+    } catch {}
+  };
+
+  const handleQuickSavePhone = (pub: Publisher, rawPhone: string) => {
+    const cleaned = rawPhone.trim();
+    const updatedPub: Publisher = {
+      ...pub,
+      phone: cleaned || undefined,
+    };
+    handleSavePublisher(updatedPub);
+    setEditingPhonePubId(null);
+    showSnack(
+      cleaned ? `📱 Telefone de ${pub.name} salvo!` : `Telefone de ${pub.name} removido`,
+      false
+    );
+  };
+
+  const isPubContactedInMeeting = useCallback(
+    (mid: string, pid: string): boolean => {
+      return database.attendanceNotes?.[mid]?.[`__contacted_${pid}`] === 'true';
+    },
+    [database.attendanceNotes]
+  );
+
+  const toggleContactedForPub = (mid: string, pid: string, forceValue?: boolean) => {
+    if (!mid) return;
+    const cur = isPubContactedInMeeting(mid, pid);
+    const next = forceValue !== undefined ? forceValue : !cur;
+    handleAttendanceNoteChange(mid, `__contacted_${pid}`, next ? 'true' : '');
+  };
+
+  const streakByPublisherMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    const chronologicalMeetings = [...database.meetings]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .filter((m) => Object.keys(database.attendance[m.id] || {}).length > 0);
+
+    activePublishers.forEach((p) => {
+      let c = 0;
+      for (let i = chronologicalMeetings.length - 1; i >= 0; i--) {
+        const s = (database.attendance[chronologicalMeetings[i].id] || {})[p.id] || null;
+        if (s === 'ausente') c++;
+        else if (s === null) continue;
+        else break;
+      }
+      map[p.id] = c;
+    });
+    return map;
+  }, [database.meetings, database.attendance, activePublishers]);
+
+  const handleExportAbsenteesSpreadsheetCsv = () => {
+    if (!currentMeeting) return;
+    const dow = currentMeeting.dayOfWeek || getPortugueseDayOfWeek(currentMeeting.date);
+    const lines = [
+      'Data da Reuniao;Dia da Semana;Tipo;Grupo;Nome do Irmao;Familia;Telefone / WhatsApp;Status;Motivo / Observacao;Faltas Seguidas;Status Contato;Mensagem Pronta',
+    ];
+    const sortedPubs = [...activePublishers].sort(
+      (a, b) => a.group - b.group || a.name.localeCompare(b.name, 'pt-BR')
+    );
+
+    sortedPubs.forEach((p) => {
+      const st = currentAttMap[p.id] || null;
+      const streak = streakByPublisherMap[p.id] || 0;
+      if (absFilterTab === 'ausentes' && st !== 'ausente') return;
+      if (absFilterTab === 'streaks' && streak < 2) return;
+      if (absFilterTab === 'zoom' && st !== 'zoom') return;
+      if (absFilterTab === 'unmarked' && st !== null) return;
+      if (absGroupFilter !== 'all' && p.group !== Number(absGroupFilter)) return;
+
+      const note = currentNotesMap[p.id] || '';
+      const contacted = isPubContactedInMeeting(currentMeeting.id, p.id)
+        ? 'Ja contatado'
+        : 'Pendente';
+      const msg = buildPersonalizedMessage(p, currentMeeting);
+
+      lines.push(
+        [
+          fmtDate(currentMeeting.date),
+          dow,
+          TYPE_LABEL[currentMeeting.type],
+          `Grupo ${p.group}`,
+          p.name,
+          p.familyName || '',
+          p.phone || '',
+          st ? LBL[st] : 'Nao marcado',
+          note,
+          streak > 0 ? `${streak}` : '0',
+          contacted,
+          msg,
+        ]
+          .map(csvEsc)
+          .join(';')
+      );
+    });
+
+    downloadFile(
+      `planilha-quem-faltou-${currentMeeting.date}.csv`,
+      '\ufeff' + lines.join('\r\n'),
+      'text/csv;charset=utf-8'
+    );
+    showSnack('📥 Planilha Excel/CSV de quem faltou baixada!', false);
+  };
+
+  const handleShareOrCopyAbsenteesList = (openWhatsApp: boolean) => {
+    if (!currentMeeting) return;
+    const dow = currentMeeting.dayOfWeek || getPortugueseDayOfWeek(currentMeeting.date);
+    const targetPubs = [...activePublishers]
+      .sort((a, b) => a.group - b.group || a.name.localeCompare(b.name, 'pt-BR'))
+      .filter((p) => {
+        const st = currentAttMap[p.id] || null;
+        const streak = streakByPublisherMap[p.id] || 0;
+        if (absFilterTab === 'ausentes' && st !== 'ausente') return false;
+        if (absFilterTab === 'streaks' && streak < 2) return false;
+        if (absFilterTab === 'zoom' && st !== 'zoom') return false;
+        if (absFilterTab === 'unmarked' && st !== null) return false;
+        if (absGroupFilter !== 'all' && p.group !== Number(absGroupFilter)) return false;
+        return true;
+      });
+
+    const titleLabel =
+      absFilterTab === 'ausentes'
+        ? 'IRMÃOS QUE FALTARAM'
+        : absFilterTab === 'streaks'
+        ? 'IRMÃOS COM FALTAS SEGUIDAS (2+)'
+        : absFilterTab === 'zoom'
+        ? 'IRMÃOS NO ZOOM'
+        : 'IRMÃOS SEM MARCAÇÃO';
+
+    const byGroup = new Map<number, Publisher[]>();
+    targetPubs.forEach((p) => {
+      const list = byGroup.get(p.group) || [];
+      list.push(p);
+      byGroup.set(p.group, list);
+    });
+
+    const lines: string[] = [
+      `📋 *${titleLabel} — ${database.congregationName || 'Congregação'}*`,
+      `📅 Reunião: ${fmtDate(currentMeeting.date)} (${dow}) · ${TYPE_LABEL[currentMeeting.type]}`,
+      `👥 Total na lista: *${targetPubs.length}*`,
+      '',
+    ];
+
+    Array.from(byGroup.keys())
+      .sort((a, b) => a - b)
+      .forEach((g) => {
+        const gPubs = byGroup.get(g) || [];
+        lines.push(`*── Grupo ${g} (${gPubs.length}) ──*`);
+        gPubs.forEach((p) => {
+          const note = currentNotesMap[p.id];
+          const streak = streakByPublisherMap[p.id] || 0;
+          const contacted = isPubContactedInMeeting(currentMeeting.id, p.id);
+          const details: string[] = [];
+          if (note) details.push(note);
+          if (streak >= 2) details.push(`${streak} faltas seguidas`);
+          if (p.phone) details.push(`Tel: ${p.phone}`);
+          if (contacted) details.push('✓ Contatado');
+          lines.push(
+            `• ${p.name}${details.length ? ` _(${details.join(' · ')})_` : ''}`
+          );
+        });
+        lines.push('');
+      });
+
+    const fullText = lines.join('\n').trim();
+    if (openWhatsApp) {
+      const a = document.createElement('a');
+      a.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(fullText)}`;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(fullText)
+        .then(() => showSnack('📋 Lista de faltantes copiada para o WhatsApp!', false))
+        .catch(() => setActiveSheet({ type: 'summary', text: fullText }));
+    } else {
+      setActiveSheet({ type: 'summary', text: fullText });
+    }
+  };
+
   // Exportações CSV / JSON
   const handleExportCsvAttendance = () => {
-    const lines = ['data;tipo;grupo;nome;familia;status;motivo'];
+    const lines = ['data;tipo;grupo;nome;familia;telefone;status;motivo'];
     [...database.meetings]
       .sort((a, b) => a.date.localeCompare(b.date))
       .forEach((m) => {
@@ -2222,6 +2462,7 @@ export function App() {
                 p.group,
                 p.name,
                 p.familyName || '',
+                p.phone || '',
                 a[p.id] || 'nao_marcado',
                 n[p.id] || '',
               ]
@@ -2230,7 +2471,7 @@ export function App() {
             );
           });
         lines.push(
-          [m.date, TYPE_LABEL[m.type], '', '(visitantes)', '', getVisitorsForMeeting(m.id), '']
+          [m.date, TYPE_LABEL[m.type], '', '(visitantes)', '', '', getVisitorsForMeeting(m.id), '']
             .map(csvEsc)
             .join(';')
         );
@@ -2244,11 +2485,17 @@ export function App() {
   };
 
   const handleExportCsvPublishers = () => {
-    const lines = ['nome;grupo;familia;ativo'].concat(
+    const lines = ['nome;grupo;familia;telefone;ativo'].concat(
       [...database.publishers]
         .sort((a, b) => a.group - b.group || a.name.localeCompare(b.name, 'pt-BR'))
         .map((p) =>
-          [p.name, p.group, p.familyName || '', p.active === false ? 'nao' : 'sim']
+          [
+            p.name,
+            p.group,
+            p.familyName || '',
+            p.phone || '',
+            p.active === false ? 'nao' : 'sim',
+          ]
             .map(csvEsc)
             .join(';')
         )
@@ -2303,6 +2550,7 @@ export function App() {
       let iN = hasCol(['nome', 'name']);
       let iG = hasCol(['grupo', 'group']);
       let iF = hasCol(['familia', 'family']);
+      let iP = hasCol(['telefone', 'phone', 'celular', 'whatsapp', 'tel']);
       let iA = hasCol(['ativo', 'active', 'situacao']);
       let body = rows;
       if (iN >= 0 || iG >= 0) {
@@ -2327,6 +2575,7 @@ export function App() {
         }
         const g = parseInt(r[iG], 10);
         const fam = (r[iF] || '').trim();
+        const phone = iP >= 0 ? (r[iP] || '').trim() : '';
         const av = r[iA];
         const ex = database.publishers.find((p) => p.name.toLowerCase() === name.toLowerCase());
         if (ex) {
@@ -2335,6 +2584,7 @@ export function App() {
             name,
             g: g > 0 ? g : ex.group,
             fam: iF >= 0 ? fam : ex.familyName || '',
+            phone: iP >= 0 && phone ? phone : ex.phone,
             active: av !== undefined && av !== '' ? !isNo(av) : ex.active !== false,
           });
           upd++;
@@ -2343,6 +2593,7 @@ export function App() {
             name,
             g,
             fam,
+            phone: phone || undefined,
             active: av !== undefined && av !== '' ? !isNo(av) : true,
           });
           add++;
@@ -2366,6 +2617,7 @@ export function App() {
             group: x.g,
             active: x.active,
             familyName: x.fam || undefined,
+            phone: x.phone || existing.phone,
           }
         : {
             id: `pub-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
@@ -2374,6 +2626,7 @@ export function App() {
             roles: ['Publicador Batizado'],
             active: x.active,
             familyName: x.fam || undefined,
+            phone: x.phone || undefined,
           };
       handleSavePublisher(pub);
     });
@@ -2632,6 +2885,15 @@ export function App() {
                 Só não marcados ({counts.n})
               </button>
               <button
+                className={`chip${counts.au > 0 ? ' text-danger font-semibold' : ''}`}
+                onClick={() => {
+                  setAbsFilterTab('ausentes');
+                  setActiveSheet({ type: 'absenteesSheet' });
+                }}
+              >
+                📋 Planilha de quem faltou ({counts.au})
+              </button>
+              <button
                 className="chip"
                 onClick={() => {
                   setManagePubsSearch('');
@@ -2688,6 +2950,12 @@ export function App() {
               >
                 🔄 Sincronizar
               </button>
+              <button
+                className="chip"
+                onClick={() => setIsSyncModalOpen(true)}
+              >
+                📱 Outro aparelho / Link
+              </button>
               {deferredInstallPrompt && (
                 <button
                   className="chip"
@@ -2728,6 +2996,31 @@ export function App() {
             <div className="empty">Crie uma reunião com “＋ Nova”.</div>
           ) : (
             <>
+              {/* BANNER RÁPIDO PARA PLANILHA DE QUEM FALTOU (LIGAR / MANDAR MENSAGEM) */}
+              {!searchQuery.trim() && (counts.au > 0 || isMeetingFinalized(currentMeeting.id)) && (
+                <div className="abs-banner">
+                  <div>
+                    <b className="block text-sm">
+                      {isMeetingFinalized(currentMeeting.id)
+                        ? `✓ Chamada finalizada · ${counts.au} irmão(s) ausente(s)`
+                        : `📋 ${counts.au} irmão(s) marcado(s) como ausente(s)`}
+                    </b>
+                    <span className="small">
+                      Abra a planilha de quem faltou para mandar mensagem no WhatsApp, ligar ou baixar em Excel.
+                    </span>
+                  </div>
+                  <button
+                    className="ibtn primary text-sm px-3.5 min-h-[42px]"
+                    onClick={() => {
+                      setAbsFilterTab('ausentes');
+                      setActiveSheet({ type: 'absenteesSheet' });
+                    }}
+                  >
+                    📋 Planilha de Quem Faltou ({counts.au})
+                  </button>
+                </div>
+              )}
+
               {/* CARD DE VISITANTES */}
               {!searchQuery.trim() && !onlyUnmarked && (
                 <div className="item mt-3">
@@ -3062,24 +3355,63 @@ export function App() {
             </div>
 
             <div className="card">
-              <h2>Ausências seguidas</h2>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h2 className="m-0">Ausências seguidas</h2>
+                <button
+                  className="chip text-xs py-1 px-2.5 min-h-[32px]"
+                  onClick={() => {
+                    setAbsFilterTab(dashData.alerts.length > 0 ? 'streaks' : 'ausentes');
+                    setActiveSheet({ type: 'absenteesSheet' });
+                  }}
+                >
+                  📋 Planilha / Ligar
+                </button>
+              </div>
               <div>
                 {dashData.alerts.length > 0 ? (
-                  dashData.alerts.map((x) => (
-                    <div className="alert" key={x.p.id}>
-                      <div>
-                        {x.p.name}
-                        <small>Grupo {x.p.group}</small>
+                  dashData.alerts.map((x) => {
+                    const waPhone = formatPhoneForWhatsApp(x.p.phone);
+                    const msg = buildPersonalizedMessage(x.p, currentMeeting);
+                    const waHref = waPhone
+                      ? `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`
+                      : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+                    return (
+                      <div className="alert items-center" key={x.p.id}>
+                        <div className="flex-1 min-w-0">
+                          {x.p.name}
+                          <small>
+                            Grupo {x.p.group}
+                            {x.p.phone ? ` · 📱 ${x.p.phone}` : ''}
+                          </small>
+                        </div>
+                        <span className="bdg">{x.c} seguidas</span>
+                        <a
+                          href={waHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-wa px-2.5 min-h-[34px] text-xs"
+                          title="Mandar mensagem no WhatsApp"
+                        >
+                          💬
+                        </a>
                       </div>
-                      <span className="bdg">{x.c} seguidas</span>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="small">
                     Nenhum irmão com 2 ou mais ausências seguidas. 🙂
                   </div>
                 )}
               </div>
+              <button
+                className="ibtn primary w-full mt-3 text-sm"
+                onClick={() => {
+                  setAbsFilterTab('ausentes');
+                  setActiveSheet({ type: 'absenteesSheet' });
+                }}
+              >
+                📋 Abrir Planilha de Quem Faltou ({counts.au})
+              </button>
             </div>
           </div>
 
@@ -3224,9 +3556,16 @@ export function App() {
                 <b>{counts.vis}</b>
                 <span>Visit.</span>
               </div>
-              <div className="a">
+              <div
+                className="a cursor-pointer"
+                title="Toque para abrir a planilha de quem faltou (mandar mensagem ou ligar)"
+                onClick={() => {
+                  setAbsFilterTab('ausentes');
+                  setActiveSheet({ type: 'absenteesSheet' });
+                }}
+              >
                 <b>{counts.au}</b>
-                <span>Aus.</span>
+                <span className="underline">Aus. 📋</span>
               </div>
               <div>
                 <b>{counts.n}</b>
@@ -3261,7 +3600,7 @@ export function App() {
           if (e.target === e.currentTarget) setActiveSheet(null);
         }}
       >
-        <div className="sheet">
+        <div className={`sheet${activeSheet?.type === 'absenteesSheet' ? ' sheet-wide' : ''}`}>
           {/* 1. NOVA REUNIÃO */}
           {activeSheet?.type === 'newMeeting' && (
             <>
@@ -3430,13 +3769,23 @@ export function App() {
                   onClick={() => {
                     setFinalizedForCurrentMeeting(true);
                     handleSaveAndSyncAttendance(currentMeeting.id);
-                    setActiveSheet(null);
-                    showSnack('Chamada finalizada ✓', false);
+                    setAbsFilterTab('ausentes');
+                    setActiveSheet({ type: 'absenteesSheet' });
+                    showSnack('Chamada finalizada ✓ Planilha de quem faltou aberta!', false);
                   }}
                 >
-                  Confirmar
+                  Confirmar e Ver Faltantes
                 </button>
               </div>
+              <button
+                className="ibtn mt w-full"
+                onClick={() => {
+                  setAbsFilterTab('ausentes');
+                  setActiveSheet({ type: 'absenteesSheet' });
+                }}
+              >
+                📋 Ver Planilha de Quem Faltou ({counts.au}) — Ligar ou Mensagem
+              </button>
               {counts.n > 0 && (
                 <button
                   className="ibtn mt w-full"
@@ -3466,7 +3815,16 @@ export function App() {
           {activeSheet?.type === 'reopen' && (
             <>
               <h3>Chamada finalizada</h3>
-              <p>Esta chamada já foi fechada. Para alterar, reabra primeiro.</p>
+              <p>Esta chamada já foi fechada. Para alterar, reabra primeiro ou veja a planilha de quem faltou.</p>
+              <button
+                className="ibtn primary w-full mb-2.5"
+                onClick={() => {
+                  setAbsFilterTab('ausentes');
+                  setActiveSheet({ type: 'absenteesSheet' });
+                }}
+              >
+                📋 Abrir Planilha de Quem Faltou ({counts.au}) — Ligar ou Mensagem
+              </button>
               <div className="row">
                 <button
                   className="ibtn flex-1"
@@ -3475,13 +3833,13 @@ export function App() {
                   Cancelar
                 </button>
                 <button
-                  className="ibtn primary flex-1"
+                  className="ibtn flex-1"
                   onClick={() => {
                     setFinalizedForCurrentMeeting(false);
                     setActiveSheet(null);
                   }}
                 >
-                  Reabrir
+                  Reabrir chamada
                 </button>
               </div>
               {currentMeeting && (
@@ -3534,6 +3892,7 @@ export function App() {
                         <span className="why block">
                           Grupo {p.group}
                           {p.familyName ? ` · ${p.familyName}` : ''}
+                          {p.phone ? ` · 📱 ${p.phone}` : ''}
                           {p.active === false ? ' · inativo' : ''}
                         </span>
                       </div>
@@ -3608,6 +3967,16 @@ export function App() {
                   <option key={f} value={f} />
                 ))}
               </datalist>
+              <div className="small mt-3 mb-1">
+                Telefone / WhatsApp (para mandar mensagem ou ligar quando faltar)
+              </div>
+              <input
+                type="text"
+                inputMode="tel"
+                value={editPubPhone}
+                onChange={(e) => setEditPubPhone(e.target.value)}
+                placeholder="Ex.: (11) 99999-9999"
+              />
               <label className="lab">
                 <input
                   type="checkbox"
@@ -3725,6 +4094,15 @@ export function App() {
               <h3>Exportar / importar</h3>
               <p>Os arquivos CSV abrem direto no Excel.</p>
               <button
+                className="ibtn primary w-full mb-2"
+                onClick={() => {
+                  setAbsFilterTab('ausentes');
+                  setActiveSheet({ type: 'absenteesSheet' });
+                }}
+              >
+                📋 Planilha de Quem Faltou ({counts.au}) — Ligar / WhatsApp / Excel
+              </button>
+              <button
                 className="ibtn w-full"
                 onClick={handleExportCsvAttendance}
               >
@@ -3770,7 +4148,7 @@ export function App() {
                 Histórico de backups / Restaurar Terça e Sábado
               </button>
               <p className="small mt-3">
-                Colunas aceitas na importação: nome, grupo, familia, ativo. Se estiver no Excel,
+                Colunas aceitas na importação: nome, grupo, familia, telefone, ativo. Se estiver no Excel,
                 use “Salvar como → CSV”.
               </p>
             </>
@@ -3979,6 +4357,458 @@ export function App() {
               </div>
             </>
           )}
+
+          {/* 14. PLANILHA DE QUEM FALTOU (MANDAR MENSAGEM / LIGAR / EXCEL) */}
+          {activeSheet?.type === 'absenteesSheet' &&
+            (() => {
+              const allSortedPubs = [...activePublishers].sort(
+                (a, b) => a.group - b.group || a.name.localeCompare(b.name, 'pt-BR')
+              );
+              const ausentesList = allSortedPubs.filter((p) => currentAttMap[p.id] === 'ausente');
+              const streaksList = allSortedPubs.filter((p) => (streakByPublisherMap[p.id] || 0) >= 2);
+              const zoomList = allSortedPubs.filter((p) => currentAttMap[p.id] === 'zoom');
+              const unmarkedList = allSortedPubs.filter((p) => !currentAttMap[p.id]);
+
+              const baseList =
+                absFilterTab === 'ausentes'
+                  ? ausentesList
+                  : absFilterTab === 'streaks'
+                  ? streaksList
+                  : absFilterTab === 'zoom'
+                  ? zoomList
+                  : unmarkedList;
+
+              const q = absSearch.trim().toLowerCase();
+              const filteredPubs = baseList.filter(
+                (p) =>
+                  (absGroupFilter === 'all' || p.group === Number(absGroupFilter)) &&
+                  (!q ||
+                    p.name.toLowerCase().includes(q) ||
+                    (p.familyName && p.familyName.toLowerCase().includes(q)) ||
+                    (p.phone && p.phone.toLowerCase().includes(q)))
+              );
+
+              const contactedCount = filteredPubs.filter(
+                (p) => currentMeeting && isPubContactedInMeeting(currentMeeting.id, p.id)
+              ).length;
+
+              return (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3>📋 Planilha de Quem Faltou</h3>
+                      <p className="mb-2">
+                        Mande mensagem no WhatsApp, ligue em 1 toque ou baixe a planilha Excel/CSV.
+                      </p>
+                    </div>
+                    <button
+                      className="ibtn min-h-[38px] min-w-[38px] px-2.5"
+                      onClick={() => setActiveSheet(null)}
+                      title="Fechar"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* SELETOR DE REUNIÃO E FILTRO DE GRUPO */}
+                  <div className="row">
+                    <select
+                      value={selectedMeetingId}
+                      onChange={(e) => setSelectedMeetingId(e.target.value)}
+                    >
+                      {sortedMeetings.map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {fmtDate(x.date)} ({x.dayOfWeek || getPortugueseDayOfWeek(x.date)}) ·{' '}
+                          {TYPE_LABEL[x.type]}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={absGroupFilter}
+                      onChange={(e) => setAbsGroupFilter(e.target.value)}
+                    >
+                      <option value="all">Todos os grupos</option>
+                      {groupsList.map((g) => (
+                        <option key={g} value={String(g)}>
+                          Grupo {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* ABAS DE FILTRO: AUSENTES | FALTAS SEGUIDAS | ZOOM | SEM MARCAÇÃO */}
+                  <div className="chips mt-2">
+                    <button
+                      className={`chip${absFilterTab === 'ausentes' ? ' on' : ''}`}
+                      onClick={() => setAbsFilterTab('ausentes')}
+                    >
+                      Ausentes ({ausentesList.length})
+                    </button>
+                    <button
+                      className={`chip${absFilterTab === 'streaks' ? ' on' : ''}`}
+                      onClick={() => setAbsFilterTab('streaks')}
+                    >
+                      ⚠ 2+ Faltas seguidas ({streaksList.length})
+                    </button>
+                    <button
+                      className={`chip${absFilterTab === 'zoom' ? ' on' : ''}`}
+                      onClick={() => setAbsFilterTab('zoom')}
+                    >
+                      No Zoom ({zoomList.length})
+                    </button>
+                    <button
+                      className={`chip${absFilterTab === 'unmarked' ? ' on' : ''}`}
+                      onClick={() => setAbsFilterTab('unmarked')}
+                    >
+                      Sem marcação ({unmarkedList.length})
+                    </button>
+                  </div>
+
+                  {/* BUSCA E BOTÃO DE PERSONALIZAR MENSAGEM */}
+                  <div className="row mt">
+                    <input
+                      type="search"
+                      placeholder="Buscar irmão ou família na planilha…"
+                      value={absSearch}
+                      onChange={(e) => setAbsSearch(e.target.value)}
+                    />
+                    <button
+                      className="ibtn text-xs whitespace-nowrap px-3"
+                      onClick={() => setShowMsgTemplateEditor((prev) => !prev)}
+                    >
+                      💬 {showMsgTemplateEditor ? 'Ocultar mensagem' : 'Editar mensagem'}
+                    </button>
+                  </div>
+
+                  {/* EDITOR DE MENSAGEM CARINHOSA DO WHATSAPP */}
+                  {showMsgTemplateEditor && (
+                    <div className="abs-card mt-2">
+                      <div className="small font-bold mb-1">
+                        Modelo da mensagem ao clicar em “💬 WhatsApp” (usa {'{nome}'}, {'{data}'},{' '}
+                        {'{dia}'}):
+                      </div>
+                      <div className="chips pb-2">
+                        <button
+                          className="chip text-xs min-h-[34px] py-1 px-2.5"
+                          onClick={() =>
+                            handleUpdateAbsMessageTemplate(
+                              'Olá, irmão(ã) {nome}! Tudo bem com você? Sentimos sua falta na reunião de {data} ({dia}). Está tudo bem com você e sua família? Precisa de alguma ajuda?'
+                            )
+                          }
+                        >
+                          ❤️ Sentimos sua falta
+                        </button>
+                        <button
+                          className="chip text-xs min-h-[34px] py-1 px-2.5"
+                          onClick={() =>
+                            handleUpdateAbsMessageTemplate(
+                              'Olá, {nome}! Tudo bem? Passando para saber como você está e dizer que sentimos sua falta na reunião de {data}. Um grande abraço!'
+                            )
+                          }
+                        >
+                          👋 Como você está?
+                        </button>
+                        <button
+                          className="chip text-xs min-h-[34px] py-1 px-2.5"
+                          onClick={() =>
+                            handleUpdateAbsMessageTemplate(
+                              'Olá, irmão(ã) {nome}! Esperamos que esteja bem. Sentimos sua falta na reunião de {data} ({dia}) e esperamos vê-lo(a) na próxima reunião!'
+                            )
+                          }
+                        >
+                          📅 Lembrete carinhoso
+                        </button>
+                      </div>
+                      <textarea
+                        className="msg-template-box"
+                        value={absMessageTemplate}
+                        onChange={(e) => handleUpdateAbsMessageTemplate(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  {/* BARRA DE AÇÕES: BAIXAR PLANILHA EXCEL / COPIAR LISTA / ENVIAR NO WHATSAPP */}
+                  <div className="row mt flex-wrap">
+                    <button
+                      className="ibtn primary flex-1 text-xs sm:text-sm min-h-[44px]"
+                      onClick={handleExportAbsenteesSpreadsheetCsv}
+                    >
+                      📥 Baixar Planilha (Excel / CSV)
+                    </button>
+                    <button
+                      className="ibtn flex-1 text-xs sm:text-sm min-h-[44px]"
+                      onClick={() => handleShareOrCopyAbsenteesList(false)}
+                    >
+                      📋 Copiar Lista p/ Grupo
+                    </button>
+                    <button
+                      className="btn-wa flex-1 text-xs sm:text-sm min-h-[44px]"
+                      onClick={() => handleShareOrCopyAbsenteesList(true)}
+                    >
+                      📲 Enviar Lista no WhatsApp
+                    </button>
+                  </div>
+
+                  {/* CONTADOR DE PROGRESSO DE CONTATOS */}
+                  <div className="small mt-2 mb-2 flex items-center justify-between">
+                    <span>
+                      Mostrando <b>{filteredPubs.length}</b> irmão(s)
+                    </span>
+                    <span>
+                      Contatados nesta reunião: <b>{contactedCount}</b> de {filteredPubs.length}
+                    </span>
+                  </div>
+
+                  {/* LISTA / PLANILHA DE IRMÃOS PARA MANDAR MENSAGEM OU LIGAR */}
+                  <div className="max-h-[48vh] overflow-y-auto pr-0.5">
+                    {filteredPubs.length === 0 ? (
+                      <div className="empty">
+                        {absFilterTab === 'ausentes'
+                          ? 'Nenhum irmão marcado como ausente nesta reunião. 🎉'
+                          : 'Nenhum irmão encontrado neste filtro.'}
+                      </div>
+                    ) : (
+                      filteredPubs.map((p) => {
+                        const st = currentAttMap[p.id] || null;
+                        const note = currentNotesMap[p.id] || '';
+                        const streak = streakByPublisherMap[p.id] || 0;
+                        const contacted = currentMeeting
+                          ? isPubContactedInMeeting(currentMeeting.id, p.id)
+                          : false;
+
+                        const draftPhone =
+                          inlinePhones[p.id] !== undefined ? inlinePhones[p.id] : p.phone || '';
+                        const effectivePhone = (p.phone || inlinePhones[p.id] || '').trim();
+                        const waPhone = formatPhoneForWhatsApp(effectivePhone);
+                        const dialPhone = formatPhoneForCall(effectivePhone);
+                        const personalizedMsg = buildPersonalizedMessage(p, currentMeeting);
+
+                        const waHref = waPhone
+                          ? `https://wa.me/${waPhone}?text=${encodeURIComponent(personalizedMsg)}`
+                          : `https://api.whatsapp.com/send?text=${encodeURIComponent(
+                              personalizedMsg
+                            )}`;
+
+                        const isEditingPhone = !p.phone || editingPhonePubId === p.id;
+
+                        return (
+                          <div
+                            key={p.id}
+                            className={`abs-card${contacted ? ' contacted' : ''}`}
+                          >
+                            {/* Linha 1: Nome, Grupo, Família, Faltas Seguidas e Check Contatado */}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <b className="text-base">{p.name}</b>
+                                  <span className="small px-2 py-0.5 rounded-full border border-[var(--line)] bg-[var(--card)]">
+                                    Grupo {p.group}
+                                  </span>
+                                  {p.familyName && (
+                                    <span className="small">· {p.familyName}</span>
+                                  )}
+                                  {streak >= 2 && (
+                                    <span className="bdg text-xs">{streak} faltas seguidas</span>
+                                  )}
+                                </div>
+
+                                {/* Motivo registrado + atalho rápido para definir motivo */}
+                                <div className="mt-1 flex items-center gap-2 flex-wrap">
+                                  <span className="small">
+                                    Motivo:{' '}
+                                    <b>{note ? note : 'Não informado'}</b>
+                                  </span>
+                                  {currentMeeting && (
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      {['Doente', 'Trabalho', 'Viagem', 'Sem contato'].map((r) => (
+                                        <button
+                                          key={r}
+                                          type="button"
+                                          className={`chip text-[11px] min-h-[26px] py-0.5 px-2${
+                                            note === r ? ' on' : ''
+                                          }`}
+                                          onClick={() =>
+                                            handleAttendanceNoteChange(
+                                              currentMeeting.id,
+                                              p.id,
+                                              note === r ? '' : r
+                                            )
+                                          }
+                                        >
+                                          {r}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Botão Marcar como Contatado */}
+                              {currentMeeting && (
+                                <button
+                                  type="button"
+                                  className={`chip text-xs min-h-[32px] py-1 px-2.5${
+                                    contacted ? ' on' : ''
+                                  }`}
+                                  onClick={() => toggleContactedForPub(currentMeeting.id, p.id)}
+                                  title="Marcar que já mandou mensagem ou ligou"
+                                >
+                                  {contacted ? '✓ Contatado' : 'Marcar contatado'}
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Linha 2: Telefone / WhatsApp (exibição ou edição rápida na própria planilha) */}
+                            <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                              {isEditingPhone ? (
+                                <div className="flex items-center gap-1.5 flex-1 min-w-[210px]">
+                                  <input
+                                    type="text"
+                                    inputMode="tel"
+                                    className="phone-inline-input flex-1"
+                                    placeholder="📱 Digite DDD + Telefone (ex: 11 99999-9999)"
+                                    value={draftPhone}
+                                    onChange={(e) =>
+                                      setInlinePhones((prev) => ({
+                                        ...prev,
+                                        [p.id]: e.target.value,
+                                      }))
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleQuickSavePhone(p, draftPhone);
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="ibtn primary min-h-[40px] px-3 text-xs"
+                                    onClick={() => handleQuickSavePhone(p, draftPhone)}
+                                  >
+                                    Salvar Tel
+                                  </button>
+                                  {p.phone && (
+                                    <button
+                                      type="button"
+                                      className="ibtn min-h-[40px] min-w-[38px] px-2 text-xs"
+                                      onClick={() => setEditingPhonePubId(null)}
+                                    >
+                                      ✕
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 flex-1">
+                                  <span className="text-sm font-medium">
+                                    📱 {p.phone}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="chip text-xs min-h-[30px] py-0.5 px-2.5"
+                                    onClick={() => {
+                                      setInlinePhones((prev) => ({
+                                        ...prev,
+                                        [p.id]: p.phone || '',
+                                      }));
+                                      setEditingPhonePubId(p.id);
+                                    }}
+                                  >
+                                    ✎ Trocar número
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Linha 3: Botões de Ação Direta — Mandar Mensagem (WhatsApp), Ligar e SMS */}
+                            <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                              <a
+                                href={waHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn-wa flex-1"
+                                onClick={() => {
+                                  if (draftPhone.trim() && draftPhone.trim() !== (p.phone || '')) {
+                                    handleQuickSavePhone(p, draftPhone);
+                                  }
+                                  if (currentMeeting) {
+                                    toggleContactedForPub(currentMeeting.id, p.id, true);
+                                  }
+                                }}
+                              >
+                                💬 {waPhone ? 'Mandar Mensagem (WhatsApp)' : 'WhatsApp (Escolher contato)'}
+                              </a>
+
+                              {dialPhone ? (
+                                <a
+                                  href={`tel:${dialPhone}`}
+                                  className="btn-call flex-1"
+                                  onClick={() => {
+                                    if (draftPhone.trim() && draftPhone.trim() !== (p.phone || '')) {
+                                      handleQuickSavePhone(p, draftPhone);
+                                    }
+                                    if (currentMeeting) {
+                                      toggleContactedForPub(currentMeeting.id, p.id, true);
+                                    }
+                                  }}
+                                >
+                                  📞 Ligar ({effectivePhone})
+                                </a>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn-call flex-1 opacity-80"
+                                  onClick={() => {
+                                    setEditingPhonePubId(p.id);
+                                    showSnack(
+                                      `Digite o telefone de ${p.name} no campo acima para ligar`,
+                                      false
+                                    );
+                                  }}
+                                >
+                                  📞 Ligar (cadastrar nº)
+                                </button>
+                              )}
+
+                              {dialPhone && (
+                                <a
+                                  href={`sms:${dialPhone}?body=${encodeURIComponent(
+                                    personalizedMsg
+                                  )}`}
+                                  className="btn-sms"
+                                  title="Enviar SMS"
+                                  onClick={() => {
+                                    if (currentMeeting) {
+                                      toggleContactedForPub(currentMeeting.id, p.id, true);
+                                    }
+                                  }}
+                                >
+                                  ✉️ SMS
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <div className="row mt">
+                    <button
+                      className="ibtn flex-1"
+                      onClick={() => setActiveSheet(null)}
+                    >
+                      Fechar
+                    </button>
+                    <button
+                      className="ibtn primary flex-1"
+                      onClick={handleExportAbsenteesSpreadsheetCsv}
+                    >
+                      📥 Baixar Planilha Excel
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
         </div>
       </div>
 
