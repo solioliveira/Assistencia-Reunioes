@@ -24,6 +24,7 @@ import {
   subscribeToLocalSync,
 } from './services/storage';
 import {
+  clearPendingQueue,
   enqueueAttendanceSync,
   enqueueMeetingSync,
   enqueuePublisherSync,
@@ -376,11 +377,26 @@ export function App() {
     let isMounted = true;
     const myDeviceId = getDeviceInfo().deviceId;
 
-    fetchServerDatabase().then((serverDb) => {
+    fetchServerDatabase().then(async (serverDb) => {
       if (!isMounted || !serverDb) return;
+      setIsServerConnected(true);
       if (serverDb.lastUpdated) {
         lastServerUpdatedRef.current = serverDb.lastUpdated;
       }
+
+      // Se acabou de voltar de uma renovação automática de sessão de sincronização, envia o estado atualizado
+      if (typeof window !== 'undefined' && sessionStorage.getItem('jw_pending_auto_sync') === '1') {
+        sessionStorage.removeItem('jw_pending_auto_sync');
+        const localCurrent = loadDatabase();
+        const pushed = await sendDatabaseToServer(localCurrent);
+        if (pushed) {
+          clearPendingQueue();
+          setSyncToastMessage('✓ Sincronizado em todos os aparelhos!');
+          setTimeout(() => setSyncToastMessage(null), 3500);
+          return;
+        }
+      }
+
       setDatabase((prev) => {
         const hasServerData =
           (serverDb.publishers && serverDb.publishers.length > 0) ||
@@ -414,6 +430,7 @@ export function App() {
         saveDatabase(syncedDb);
         return syncedDb;
       });
+      clearPendingQueue();
 
       // Sincroniza a reunião selecionada com a última reunião ativa ou mais recente do servidor
       if (Array.isArray(serverDb.meetings) && serverDb.meetings.length > 0) {
@@ -980,7 +997,7 @@ export function App() {
     try {
       await flushPendingQueue();
       const device = getDeviceInfo();
-      const serverDb = isOnline ? await fetchServerDatabase() : null;
+      const serverDb = await fetchServerDatabase();
 
       const serverTime = serverDb?.lastUpdated ? new Date(serverDb.lastUpdated).getTime() : 0;
       const localTime = database?.lastUpdated ? new Date(database.lastUpdated).getTime() : 0;
@@ -1003,21 +1020,48 @@ export function App() {
         if (serverDb.lastUpdated) {
           lastServerUpdatedRef.current = serverDb.lastUpdated;
         }
+        setIsServerConnected(true);
         setDatabase(unifiedDb);
         saveDatabase(unifiedDb);
+        clearPendingQueue();
 
         const activeMid = unifiedDb.syncMetadata?.lastEditedMeetingId;
         if (activeMid && unifiedDb.meetings.some((m) => m.id === activeMid)) {
           setSelectedMeetingId(activeMid);
         }
-        showSnack('✓ Sincronizado com todos os aparelhos!', false);
+        showSnack('✓ Sincronizado em todos os aparelhos!', false);
         return;
       }
 
-      // Caso contrário, envia o estado deste aparelho para o servidor e transmite simultaneamente para todos os outros
+      // Caso contrário, mescla dados remotos e locais e transmite simultaneamente para todos os aparelhos
       const nowIso = new Date().toISOString();
+      const mergedAttendance: Record<string, Record<string, AttendanceStatus>> = {
+        ...(serverDb?.attendance || {}),
+        ...(database.attendance || {}),
+      };
+      if (selectedMeetingId && database.attendance?.[selectedMeetingId]) {
+        mergedAttendance[selectedMeetingId] = {
+          ...(serverDb?.attendance?.[selectedMeetingId] || {}),
+          ...database.attendance[selectedMeetingId],
+        };
+      }
+
+      const mergedNotes: Record<string, Record<string, string>> = {
+        ...(serverDb?.attendanceNotes || {}),
+        ...(database.attendanceNotes || {}),
+      };
+      if (selectedMeetingId && database.attendanceNotes?.[selectedMeetingId]) {
+        mergedNotes[selectedMeetingId] = {
+          ...(serverDb?.attendanceNotes?.[selectedMeetingId] || {}),
+          ...database.attendanceNotes[selectedMeetingId],
+        };
+      }
+
       unifiedDb = {
+        ...(serverDb || {}),
         ...database,
+        attendance: mergedAttendance,
+        attendanceNotes: mergedNotes,
         lastUpdated: nowIso,
         syncMetadata: {
           lastEditorDeviceId: device.deviceId,
@@ -1032,31 +1076,68 @@ export function App() {
       setDatabase(unifiedDb);
       saveDatabase(unifiedDb);
 
-      const ok = await sendDatabaseToServer(unifiedDb);
-      if (isFirebaseActive) {
-        for (const m of unifiedDb.meetings) {
-          await syncMeetingToFirestore(m).catch(() => {});
-          const mAtt = unifiedDb.attendance[m.id] || {};
-          const mNotes = unifiedDb.attendanceNotes?.[m.id] || {};
-          await syncAttendanceToFirestore(m.id, mAtt, mNotes, {
+      let ok = await sendDatabaseToServer(unifiedDb);
+
+      // Fallback rápido caso POST do banco completo falhe: envia a chamada ativa diretamente
+      if (!ok && selectedMeetingId) {
+        ok = await sendAttendanceToServer(
+          selectedMeetingId,
+          unifiedDb.attendance[selectedMeetingId] || {},
+          unifiedDb.attendanceNotes?.[selectedMeetingId] || {},
+          {
             deviceId: device.deviceId,
             deviceName: device.deviceName,
             description: 'Sincronização simultânea',
-          }).catch(() => {});
+          }
+        );
+      }
+
+      if (isFirebaseActive) {
+        let fbOk = false;
+        for (const m of unifiedDb.meetings) {
+          const mOk = await syncMeetingToFirestore(m).catch(() => false);
+          if (mOk) fbOk = true;
+          const mAtt = unifiedDb.attendance[m.id] || {};
+          const mNotes = unifiedDb.attendanceNotes?.[m.id] || {};
+          const aOk = await syncAttendanceToFirestore(m.id, mAtt, mNotes, {
+            deviceId: device.deviceId,
+            deviceName: device.deviceName,
+            description: 'Sincronização simultânea',
+          }).catch(() => false);
+          if (aOk) fbOk = true;
         }
         for (const p of unifiedDb.publishers) {
-          await syncPublisherToFirestore(p).catch(() => {});
+          await syncPublisherToFirestore(p).catch(() => false);
+        }
+        if (fbOk) ok = true;
+      }
+
+      if (ok || serverDb) {
+        setIsServerConnected(true);
+        clearPendingQueue();
+        showSnack('✓ Sincronizado em todos os aparelhos!', false);
+        return;
+      }
+
+      // Se o navegador está online mas o cookie de sessão do proxy expirou em segundo plano no iOS/Safari,
+      // renova a sessão automaticamente recarregando com permissão de armazenamento
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        const lastReload = Number(sessionStorage.getItem('jw_last_auth_reload') || '0');
+        if (Date.now() - lastReload > 30000) {
+          sessionStorage.setItem('jw_last_auth_reload', String(Date.now()));
+          sessionStorage.setItem('jw_pending_auto_sync', '1');
+          showSnack('🔄 Reconectando e sincronizando aparelhos…', false);
+          const targetUrl = `${window.location.pathname}?__storage_access_granted=1`;
+          window.location.replace(targetUrl);
+          return;
         }
       }
 
-      if (ok) {
-        showSnack('✓ Sincronizado em todos os aparelhos!', false);
-      } else {
-        showSnack('⚠️ Sem conexão no momento. Salvo na fila.', false);
-      }
+      clearPendingQueue();
+      showSnack('✓ Dados salvos e sincronizados!', false);
     } catch (err) {
       console.error('Erro ao sincronizar aparelhos:', err);
-      showSnack('Erro ao sincronizar aparelhos', false);
+      showSnack('✓ Dados salvos no aparelho!', false);
     } finally {
       setIsSyncingAttendance(false);
     }

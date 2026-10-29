@@ -117,6 +117,46 @@ async function startServer() {
     next();
   });
 
+  // Desabilita e remove qualquer Service Worker antigo que possa interceptar rotas de autenticação ou API no iOS/Android/Mac
+  const SELF_DESTRUCT_SW = `
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+      .then(() => self.registration.unregister())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then((clients) => {
+        clients.forEach((client) => {
+          if ('navigate' in client) {
+            client.navigate(client.url).catch(() => {});
+          }
+        });
+      })
+  );
+});
+`;
+
+  app.get(['/sw.js', '/dev-sw.js', '/workbox-*.js'], (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.send(SELF_DESTRUCT_SW);
+  });
+
+  app.get('/registerSW.js', (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.send(`
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    for (const r of regs) r.unregister();
+  }).catch(() => {});
+}
+`);
+  });
+
   // ==========================================
   // API ROUTES
   // ==========================================
@@ -168,7 +208,7 @@ async function startServer() {
   app.post('/api/database', (req: Request, res: Response) => {
     try {
       const incoming = req.body as CongregationDatabase;
-      if (!incoming || !Array.isArray(incoming.publishers)) {
+      if (!incoming || typeof incoming !== 'object') {
         return res.status(400).json({ error: 'Formato de banco inválido.' });
       }
 
@@ -176,8 +216,61 @@ async function startServer() {
       const sourceDeviceId = req.body?.sourceDeviceId;
       const sourceDeviceName = req.body?.sourceDeviceName;
 
+      // Protege contra sobrescrita acidental por payload vazio
+      const incomingPublishers =
+        Array.isArray(incoming.publishers) && incoming.publishers.length > 0
+          ? incoming.publishers
+          : currentDatabase.publishers;
+
+      const incomingMeetings = Array.isArray(incoming.meetings)
+        ? incoming.meetings
+        : currentDatabase.meetings;
+
+      // Mescla chamadas para não perder marcações de outras reuniões feitas em outros aparelhos
+      const mergedAttendance: Record<string, Record<string, AttendanceStatus>> = {
+        ...(currentDatabase.attendance || {}),
+      };
+      if (incoming.attendance && typeof incoming.attendance === 'object') {
+        for (const [mid, attMap] of Object.entries(incoming.attendance)) {
+          if (attMap && typeof attMap === 'object') {
+            mergedAttendance[mid] = {
+              ...(mergedAttendance[mid] || {}),
+              ...attMap,
+            };
+          }
+        }
+      }
+
+      const mergedNotes: Record<string, Record<string, string>> = {
+        ...(currentDatabase.attendanceNotes || {}),
+      };
+      if (incoming.attendanceNotes && typeof incoming.attendanceNotes === 'object') {
+        for (const [mid, noteMap] of Object.entries(incoming.attendanceNotes)) {
+          if (noteMap && typeof noteMap === 'object') {
+            mergedNotes[mid] = {
+              ...(mergedNotes[mid] || {}),
+              ...noteMap,
+            };
+          }
+        }
+      }
+
+      // Garante que apenas reuniões existentes permaneçam no mapa de chamadas caso alguma tenha sido excluída
+      const validMeetingIds = new Set(incomingMeetings.map((m) => m.id));
+      for (const mid of Object.keys(mergedAttendance)) {
+        if (!validMeetingIds.has(mid) && incoming.attendance && !(mid in incoming.attendance)) {
+          delete mergedAttendance[mid];
+          delete mergedNotes[mid];
+        }
+      }
+
       currentDatabase = {
+        ...currentDatabase,
         ...incoming,
+        publishers: incomingPublishers,
+        meetings: incomingMeetings,
+        attendance: mergedAttendance,
+        attendanceNotes: mergedNotes,
         lastUpdated: nowIso,
         syncMetadata: incoming.syncMetadata || {
           lastEditorDeviceId: sourceDeviceId || 'aparelho',

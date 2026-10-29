@@ -1780,8 +1780,15 @@
       "status": "realizada"
     }
   ],
-  "lastUpdated": "2026-09-12T22:12:31.557Z",
+  "lastUpdated": "2026-10-29T21:32:47.025Z",
+  "syncMetadata": {
+    "lastEditorDeviceId": "dev-mux91hmf-hrxpe",
+    "lastEditorDeviceName": "Mac",
+    "lastEditedAt": "2026-10-29T21:29:48.279Z",
+    "lastEditedMeetingId": "meet-sabado-12",
+    "lastEditedDescription": "Sincronização simultânea"
+  },
   "exportDate": "2026-09-12T18:01:52.115Z",
-  "sourceDeviceId": "dev-mtywg0i6-m19jr",
+  "sourceDeviceId": "dev-mux91hmf-hrxpe",
   "sourceDeviceName": "Mac"
 }

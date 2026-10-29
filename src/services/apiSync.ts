@@ -143,25 +143,87 @@ export function subscribeToServerEvents(callbacks: ServerSyncEventCallbacks): ()
 }
 
 /**
+ * Helper resiliente para requisições JSON na API com re-tentativa automática
+ * (resolve redirecionamentos 302 de cache de token e evita falhas falsas de conexão no iOS/Safari/Mobile)
+ */
+async function apiFetchJson<T = any>(
+  path: string,
+  options: RequestInit = {},
+  requireSuccessField: boolean = false,
+  maxAttempts: number = 3
+): Promise<T | null> {
+  const method = (options.method || 'GET').toUpperCase();
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const separator = path.includes('?') ? '&' : '?';
+      const url = `${path}${separator}_t=${Date.now()}&__storage_access_granted=1`;
+
+      const res = await fetch(url, {
+        ...options,
+        credentials: 'include',
+        cache: 'no-store',
+        headers: {
+          Accept: 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+          ...(options.headers || {}),
+        },
+      });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!res.ok || !contentType.includes('application/json')) {
+        // Se foi redirecionado para cookie_check ou warmup HTML, faz um GET /api/health para aquecer o cache de token do Nginx
+        if (attempt < maxAttempts) {
+          await fetch(`/api/health?_t=${Date.now()}&__storage_access_granted=1`, {
+            credentials: 'include',
+            cache: 'no-store',
+          }).catch(() => {});
+          await new Promise((r) => setTimeout(r, 180 * attempt));
+          continue;
+        }
+        return null;
+      }
+
+      const data = await res.json();
+
+      // Se um POST sofreu redirect 302 no Nginx (que converte POST em GET e aquece o cache),
+      // data.success não será true na primeira tentativa; a segunda tentativa logo em seguida passa direto como POST!
+      if (requireSuccessField && (!data || data.success !== true)) {
+        if (attempt < maxAttempts && method !== 'GET') {
+          await new Promise((r) => setTimeout(r, 80));
+          continue;
+        }
+        return null;
+      }
+
+      isConnected = true;
+      return data as T;
+    } catch (err) {
+      if (attempt < maxAttempts) {
+        await fetch(`/api/health?_t=${Date.now()}&__storage_access_granted=1`, {
+          credentials: 'include',
+          cache: 'no-store',
+        }).catch(() => {});
+        await new Promise((r) => setTimeout(r, 200 * attempt));
+        continue;
+      }
+      console.warn(`[ServerSync] Falha em ${method} ${path}:`, err);
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
  * Busca o banco mais atual da congregação no servidor (sem cache)
  */
 export async function fetchServerDatabase(): Promise<CongregationDatabase | null> {
-  try {
-    const res = await fetch(`/api/database?_t=${Date.now()}`, {
-      headers: {
-        Accept: 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        Pragma: 'no-cache',
-      },
-      cache: 'no-store',
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    return data as CongregationDatabase;
-  } catch (err) {
-    console.warn('[ServerSync] Falha ao obter banco do servidor:', err);
-    return null;
+  const data = await apiFetchJson<CongregationDatabase>('/api/database', { method: 'GET' }, false, 3);
+  if (data && Array.isArray(data.publishers)) {
+    return data;
   }
+  return null;
 }
 
 /**
@@ -173,23 +235,12 @@ export async function pollServerChanges(since: string): Promise<{
   connectedClients?: number;
   database?: CongregationDatabase;
 } | null> {
-  try {
-    const res = await fetch(
-      `/api/sync/poll?since=${encodeURIComponent(since || '')}&_t=${Date.now()}`,
-      {
-        headers: {
-          Accept: 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          Pragma: 'no-cache',
-        },
-        cache: 'no-store',
-      }
-    );
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
+  return await apiFetchJson(
+    `/api/sync/poll?since=${encodeURIComponent(since || '')}`,
+    { method: 'GET' },
+    false,
+    1
+  );
 }
 
 /**
@@ -202,12 +253,12 @@ export async function sendAttendanceToServer(
   editorInfo?: { deviceId: string; deviceName: string; description?: string },
   changes?: Array<{ pid: string; st: AttendanceStatus | null; note?: string }>
 ): Promise<boolean> {
-  try {
-    const device = editorInfo || getDeviceInfo();
-    const res = await fetch('/api/sync/attendance', {
+  const device = editorInfo || getDeviceInfo();
+  const data = await apiFetchJson(
+    '/api/sync/attendance',
+    {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
       body: JSON.stringify({
         meetingId,
         attendanceMap,
@@ -219,47 +270,45 @@ export async function sendAttendanceToServer(
           description: editorInfo?.description || 'Chamada atualizada',
         },
       }),
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn('[ServerSync] Erro ao enviar chamada ao servidor:', err);
-    return false;
-  }
+    },
+    true,
+    3
+  );
+  return Boolean(data && data.success);
 }
 
 /**
  * Salva ou atualiza o banco completo no servidor
  */
 export async function sendDatabaseToServer(database: CongregationDatabase): Promise<boolean> {
-  try {
-    const device = getDeviceInfo();
-    const res = await fetch('/api/database', {
+  const device = getDeviceInfo();
+  const data = await apiFetchJson(
+    '/api/database',
+    {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
       body: JSON.stringify({
         ...database,
         sourceDeviceId: device.deviceId,
         sourceDeviceName: device.deviceName,
       }),
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn('[ServerSync] Erro ao enviar banco completo ao servidor:', err);
-    return false;
-  }
+    },
+    true,
+    3
+  );
+  return Boolean(data && data.success);
 }
 
 /**
  * Salva ou atualiza um publicador no servidor
  */
 export async function sendPublisherToServer(publisher: Publisher): Promise<boolean> {
-  try {
-    const device = getDeviceInfo();
-    const res = await fetch('/api/sync/publisher', {
+  const device = getDeviceInfo();
+  const data = await apiFetchJson(
+    '/api/sync/publisher',
+    {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
       body: JSON.stringify({
         publisher,
         editorInfo: {
@@ -267,29 +316,27 @@ export async function sendPublisherToServer(publisher: Publisher): Promise<boole
           deviceName: device.deviceName,
         },
       }),
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn('[ServerSync] Erro ao sincronizar publicador:', err);
-    return false;
-  }
+    },
+    true,
+    3
+  );
+  return Boolean(data && data.success);
 }
 
 /**
  * Exclui um publicador no servidor
  */
 export async function deletePublisherOnServer(publisherId: string): Promise<boolean> {
-  try {
-    const device = getDeviceInfo();
-    const res = await fetch(`/api/sync/publisher/${publisherId}?deviceId=${device.deviceId}`, {
+  const device = getDeviceInfo();
+  const data = await apiFetchJson(
+    `/api/sync/publisher/${publisherId}?deviceId=${encodeURIComponent(device.deviceId)}`,
+    {
       method: 'DELETE',
-      cache: 'no-store',
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn('[ServerSync] Erro ao excluir publicador no servidor:', err);
-    return false;
-  }
+    },
+    true,
+    3
+  );
+  return Boolean(data && data.success);
 }
 
 /**
@@ -300,12 +347,12 @@ export async function sendMeetingToServer(
   initialAttendance?: Record<string, AttendanceStatus>,
   initialNotes?: Record<string, string>
 ): Promise<boolean> {
-  try {
-    const device = getDeviceInfo();
-    const res = await fetch('/api/sync/meeting', {
+  const device = getDeviceInfo();
+  const data = await apiFetchJson(
+    '/api/sync/meeting',
+    {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      cache: 'no-store',
       body: JSON.stringify({
         meeting,
         initialAttendance,
@@ -315,37 +362,37 @@ export async function sendMeetingToServer(
           deviceName: device.deviceName,
         },
       }),
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn('[ServerSync] Erro ao sincronizar reunião:', err);
-    return false;
-  }
+    },
+    true,
+    3
+  );
+  return Boolean(data && data.success);
 }
 
 /**
  * Exclui uma reunião no servidor
  */
 export async function deleteMeetingOnServer(meetingId: string): Promise<boolean> {
-  try {
-    const device = getDeviceInfo();
-    const res = await fetch(`/api/sync/meeting/${meetingId}?deviceId=${device.deviceId}`, {
+  const device = getDeviceInfo();
+  const data = await apiFetchJson(
+    `/api/sync/meeting/${meetingId}?deviceId=${encodeURIComponent(device.deviceId)}`,
+    {
       method: 'DELETE',
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn('[ServerSync] Erro ao excluir reunião no servidor:', err);
-    return false;
-  }
+    },
+    true,
+    3
+  );
+  return Boolean(data && data.success);
 }
 
 /**
  * Salva visita de pastoreio no servidor
  */
 export async function sendShepherdingToServer(visit: ShepherdingVisit): Promise<boolean> {
-  try {
-    const device = getDeviceInfo();
-    const res = await fetch('/api/sync/shepherding', {
+  const device = getDeviceInfo();
+  const data = await apiFetchJson(
+    '/api/sync/shepherding',
+    {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -355,12 +402,11 @@ export async function sendShepherdingToServer(visit: ShepherdingVisit): Promise<
           deviceName: device.deviceName,
         },
       }),
-    });
-    return res.ok;
-  } catch (err) {
-    console.warn('[ServerSync] Erro ao sincronizar pastoreio:', err);
-    return false;
-  }
+    },
+    true,
+    3
+  );
+  return Boolean(data && data.success);
 }
 
 /**
