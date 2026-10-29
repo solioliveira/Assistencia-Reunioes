@@ -385,76 +385,23 @@ export function App() {
 
         if (!hasServerData) return prev;
 
-        const mergedAttendance: Record<string, Record<string, AttendanceStatus>> = {};
-        if (serverDb.attendance) {
-          for (const [mId, mAtt] of Object.entries(serverDb.attendance)) {
-            mergedAttendance[mId] = { ...(mAtt || {}) };
-          }
-        }
-        if (prev.attendance) {
-          for (const [mId, mAtt] of Object.entries(prev.attendance)) {
-            mergedAttendance[mId] = {
-              ...(mergedAttendance[mId] || {}),
-              ...(mAtt || {}),
-            };
-          }
-        }
-
-        const mergedNotes: Record<string, Record<string, string>> = {};
-        if (serverDb.attendanceNotes) {
-          for (const [mId, mNotes] of Object.entries(serverDb.attendanceNotes)) {
-            mergedNotes[mId] = { ...(mNotes || {}) };
-          }
-        }
-        if (prev.attendanceNotes) {
-          for (const [mId, mNotes] of Object.entries(prev.attendanceNotes)) {
-            mergedNotes[mId] = {
-              ...(mergedNotes[mId] || {}),
-              ...(mNotes || {}),
-            };
-          }
-        }
-
-        const localPubMap = new Map((prev.publishers || []).map((p) => [p.id, p]));
-        const mergedPublishers = [...(serverDb.publishers || [])].map((sp) => {
-          const lp = localPubMap.get(sp.id);
-          return lp ? { ...sp, ...lp } : sp;
-        });
-        for (const lp of prev.publishers || []) {
-          if (!mergedPublishers.some((p) => p.id === lp.id)) {
-            mergedPublishers.push(lp);
-          }
-        }
-
-        const localMeetingMap = new Map((prev.meetings || []).map((m) => [m.id, m]));
-        const mergedMeetings = [...(serverDb.meetings || [])].map((sm) => {
-          const lm = localMeetingMap.get(sm.id);
-          return lm ? { ...sm, ...lm } : sm;
-        });
-        for (const lm of prev.meetings || []) {
-          if (!mergedMeetings.some((m) => m.id === lm.id)) {
-            mergedMeetings.push(lm);
-          }
-        }
-
-        const mergedDb: CongregationDatabase = {
+        // O servidor é a fonte da verdade para todos os aparelhos conectados
+        const syncedDb: CongregationDatabase = {
           ...prev,
           ...serverDb,
-          congregationName: prev.congregationName || serverDb.congregationName,
-          publishers: mergedPublishers.length > 0 ? mergedPublishers : prev.publishers,
-          meetings: mergedMeetings.length > 0 ? mergedMeetings : prev.meetings,
-          attendance: mergedAttendance,
-          attendanceNotes: mergedNotes,
-          shepherdingVisits:
-            prev.shepherdingVisits && prev.shepherdingVisits.length > 0
-              ? prev.shepherdingVisits
-              : serverDb.shepherdingVisits || [],
-          syncMetadata: prev.syncMetadata || serverDb.syncMetadata,
+          congregationName: serverDb.congregationName || prev.congregationName,
+          publishers: Array.isArray(serverDb.publishers) ? serverDb.publishers : prev.publishers,
+          meetings: Array.isArray(serverDb.meetings) ? serverDb.meetings : prev.meetings,
+          attendance: serverDb.attendance || {},
+          attendanceNotes: serverDb.attendanceNotes || {},
+          shepherdingVisits: Array.isArray(serverDb.shepherdingVisits)
+            ? serverDb.shepherdingVisits
+            : prev.shepherdingVisits || [],
+          syncMetadata: serverDb.syncMetadata || prev.syncMetadata,
         };
 
-        saveDatabase(mergedDb);
-        sendDatabaseToServer(mergedDb).catch(() => {});
-        return mergedDb;
+        saveDatabase(syncedDb);
+        return syncedDb;
       });
     });
 
@@ -499,13 +446,27 @@ export function App() {
       },
       onDatabaseUpdated: (data) => {
         if (!isMounted) return;
-        setDatabase((prev) => ({
-          ...prev,
-          ...data.database,
-          attendance: { ...prev.attendance, ...(data.database.attendance || {}) },
-          attendanceNotes: { ...(prev.attendanceNotes || {}), ...(data.database.attendanceNotes || {}) },
-          syncMetadata: data.database.syncMetadata || prev.syncMetadata,
-        }));
+        setDatabase((prev) => {
+          const nextDb: CongregationDatabase = {
+            ...prev,
+            ...data.database,
+            publishers: Array.isArray(data.database.publishers)
+              ? data.database.publishers
+              : prev.publishers,
+            meetings: Array.isArray(data.database.meetings)
+              ? data.database.meetings
+              : prev.meetings,
+            attendance: data.database.attendance || {},
+            attendanceNotes: data.database.attendanceNotes || {},
+            syncMetadata: data.database.syncMetadata || prev.syncMetadata,
+          };
+          saveDatabase(nextDb);
+          return nextDb;
+        });
+        if (data.sourceDeviceName) {
+          setSyncToastMessage(`🔄 Sincronizado com ${data.sourceDeviceName}`);
+          setTimeout(() => setSyncToastMessage(null), 3500);
+        }
       },
       onPublisherUpdated: (data) => {
         if (!isMounted) return;
@@ -516,10 +477,23 @@ export function App() {
       },
       onMeetingUpdated: (data) => {
         if (!isMounted) return;
-        setDatabase((prev) => ({
-          ...prev,
-          meetings: data.meetings,
-        }));
+        setDatabase((prev) => {
+          const validMeetingIds = new Set((data.meetings || []).map((m) => m.id));
+          const nextAtt: Record<string, Record<string, AttendanceStatus>> = {};
+          Object.entries(prev.attendance || {}).forEach(([mid, att]) => {
+            if (validMeetingIds.has(mid)) nextAtt[mid] = att;
+          });
+          const nextNotes: Record<string, Record<string, string>> = {};
+          Object.entries(prev.attendanceNotes || {}).forEach(([mid, notes]) => {
+            if (validMeetingIds.has(mid)) nextNotes[mid] = notes;
+          });
+          return {
+            ...prev,
+            meetings: data.meetings,
+            attendance: nextAtt,
+            attendanceNotes: nextNotes,
+          };
+        });
       },
     });
 
@@ -857,7 +831,7 @@ export function App() {
     }
   };
 
-  // ATUALIZAR DADOS E RECARREGAR CHAMADA
+  // ATUALIZAR DADOS E RECARREGAR CHAMADA DO SERVIDOR
   const handleRefreshAttendanceData = async (silent: boolean = false) => {
     if (!silent) setIsRefreshingAttendance(true);
     try {
@@ -869,11 +843,11 @@ export function App() {
           currentDb = {
             ...currentDb,
             ...serverDb,
-            publishers: serverDb.publishers?.length ? serverDb.publishers : currentDb.publishers,
-            meetings: serverDb.meetings?.length ? serverDb.meetings : currentDb.meetings,
-            attendance: { ...currentDb.attendance, ...(serverDb.attendance || {}) },
-            attendanceNotes: { ...(currentDb.attendanceNotes || {}), ...(serverDb.attendanceNotes || {}) },
-            shepherdingVisits: serverDb.shepherdingVisits?.length
+            publishers: Array.isArray(serverDb.publishers) ? serverDb.publishers : currentDb.publishers,
+            meetings: Array.isArray(serverDb.meetings) ? serverDb.meetings : currentDb.meetings,
+            attendance: serverDb.attendance || {},
+            attendanceNotes: serverDb.attendanceNotes || {},
+            shepherdingVisits: Array.isArray(serverDb.shepherdingVisits)
               ? serverDb.shepherdingVisits
               : currentDb.shepherdingVisits,
             syncMetadata: serverDb.syncMetadata || currentDb.syncMetadata,
@@ -908,6 +882,67 @@ export function App() {
     } finally {
       if (!silent) setIsRefreshingAttendance(false);
     }
+  };
+
+  // FORÇAR SINCRONIZAÇÃO COMPLETA: Envia o banco deste aparelho para todos os outros aparelhos
+  const handleForcePushSyncAllDevices = async () => {
+    setIsSyncingAttendance(true);
+    buzz();
+    try {
+      await flushPendingQueue();
+      const device = getDeviceInfo();
+      const nowIso = new Date().toISOString();
+      const updatedDb: CongregationDatabase = {
+        ...database,
+        lastUpdated: nowIso,
+        syncMetadata: {
+          lastEditorDeviceId: device.deviceId,
+          lastEditorDeviceName: device.deviceName,
+          lastEditedAt: nowIso,
+          lastEditedMeetingId: selectedMeetingId,
+          lastEditedDescription: 'Sincronização forçada em todos os aparelhos',
+        },
+      };
+
+      setDatabase(updatedDb);
+      saveDatabase(updatedDb);
+
+      const ok = await sendDatabaseToServer(updatedDb);
+      if (isFirebaseActive) {
+        for (const m of updatedDb.meetings) {
+          await syncMeetingToFirestore(m).catch(() => {});
+          const mAtt = updatedDb.attendance[m.id] || {};
+          const mNotes = updatedDb.attendanceNotes?.[m.id] || {};
+          await syncAttendanceToFirestore(m.id, mAtt, mNotes, {
+            deviceId: device.deviceId,
+            deviceName: device.deviceName,
+            description: 'Sincronização forçada',
+          }).catch(() => {});
+        }
+        for (const p of updatedDb.publishers) {
+          await syncPublisherToFirestore(p).catch(() => {});
+        }
+      }
+
+      if (ok) {
+        showSnack('🔄 Sincronizado em todos os aparelhos!', false);
+      } else {
+        showSnack('⚠️ Sem conexão no momento. Salvo na fila.', false);
+      }
+    } catch (err) {
+      console.error('Erro ao forçar sincronização:', err);
+      showSnack('Erro ao sincronizar aparelhos', false);
+    } finally {
+      setIsSyncingAttendance(false);
+    }
+  };
+
+  // FORÇAR ATUALIZAÇÃO DESTE APARELHO A PARTIR DO SERVIDOR CENTRAL
+  const handleForcePullSyncFromServer = async () => {
+    buzz();
+    await flushPendingQueue();
+    await handleRefreshAttendanceData(false);
+    showSnack('⬇️ Dados atualizados com a nuvem!', false);
   };
 
   // Sincronização e reconexão ativa em segundo plano para iPhone e iPad
@@ -2136,11 +2171,20 @@ export function App() {
           </div>
           <div
             className="badge cursor-pointer"
-            title="Sincronização em tempo real entre aparelhos"
+            title="Abrir painel de sincronização entre aparelhos"
             onClick={() => setIsSyncModalOpen(true)}
           >
             {syncBadgeText}
           </div>
+          <button
+            className="ibtn"
+            onClick={handleForcePushSyncAllDevices}
+            disabled={isSyncingAttendance || isRefreshingAttendance}
+            title="Forçar sincronização em todos os aparelhos agora"
+            aria-label="Forçar sincronização em todos os aparelhos agora"
+          >
+            🔄
+          </button>
           <button className="ibtn" onClick={toggleTheme} title="Tema Claro / Escuro">
             🌓
           </button>
@@ -2272,6 +2316,13 @@ export function App() {
                 onClick={() => setActiveSheet({ type: 'exportSheet' })}
               >
                 Exportar / importar
+              </button>
+              <button
+                className="chip"
+                onClick={handleForcePushSyncAllDevices}
+                disabled={isSyncingAttendance || isRefreshingAttendance}
+              >
+                🔄 Forçar sincronização
               </button>
               <button
                 className="chip"
@@ -3593,6 +3644,8 @@ export function App() {
         connectedDevicesCount={connectedDevicesCount}
         onFirebaseStatusChanged={setIsFirebaseActive}
         onOpenFullSettings={() => setIsSettingsOpen(true)}
+        onForcePushSync={handleForcePushSyncAllDevices}
+        onForcePullSync={handleForcePullSyncFromServer}
       />
 
       {/* Modal de Configurações, Nuvem e Backup */}

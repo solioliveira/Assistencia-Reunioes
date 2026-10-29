@@ -40,6 +40,8 @@ interface SyncDevicesModalProps {
   connectedDevicesCount?: number;
   onFirebaseStatusChanged: (active: boolean) => void;
   onOpenFullSettings: () => void;
+  onForcePushSync?: () => Promise<void>;
+  onForcePullSync?: () => Promise<void>;
 }
 
 export const SyncDevicesModal: React.FC<SyncDevicesModalProps> = ({
@@ -52,11 +54,16 @@ export const SyncDevicesModal: React.FC<SyncDevicesModalProps> = ({
   connectedDevicesCount = 1,
   onFirebaseStatusChanged,
   onOpenFullSettings,
+  onForcePushSync,
+  onForcePullSync,
 }) => {
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [isForcingPush, setIsForcingPush] = useState(false);
+  const [isForcingPull, setIsForcingPull] = useState(false);
+  const [forceSyncFeedback, setForceSyncFeedback] = useState<string | null>(null);
 
   const [deviceInfo, setDeviceInfo] = useState(() => getDeviceInfo());
   const [deviceNameInput, setDeviceNameInput] = useState(deviceInfo.deviceName);
@@ -221,6 +228,91 @@ export const SyncDevicesModal: React.FC<SyncDevicesModalProps> = ({
                 <span>Nuvem Firebase (Opcional)</span>
               </button>
             )}
+          </div>
+
+          {/* PAINEL DE AÇÃO IMEDIATA: FORÇAR SINCRONIZAÇÃO EM TODOS OS APARELHOS */}
+          <div className="p-4 sm:p-5 rounded-2xl border-2 border-blue-300 bg-blue-50/80 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-blue-950 font-bold text-sm sm:text-base">
+                <RefreshCw className={`w-5 h-5 text-blue-600 ${isForcingPush || isForcingPull ? 'animate-spin' : ''}`} />
+                <span>Forçar Sincronização Agora</span>
+              </div>
+              <span className="text-[11px] font-bold text-blue-800 bg-blue-100 px-2.5 py-0.5 rounded-full border border-blue-200">
+                Sincronização Manual Instantânea
+              </span>
+            </div>
+            <p className="text-xs text-blue-900 leading-relaxed">
+              Use os botões abaixo caso queira <strong>forçar imediatamente</strong> que todos os celulares, iPads e computadores fiquem exatamente com os mesmos dados:
+            </p>
+
+            {forceSyncFeedback && (
+              <div className="p-2.5 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-950 text-xs font-bold flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                <span>{forceSyncFeedback}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <button
+                type="button"
+                disabled={isForcingPush || isForcingPull}
+                onClick={async () => {
+                  if (!onForcePushSync) return;
+                  setIsForcingPush(true);
+                  setForceSyncFeedback(null);
+                  try {
+                    await onForcePushSync();
+                    setForceSyncFeedback('Dados deste aparelho enviados e sincronizados em todos os aparelhos!');
+                    setTimeout(() => setForceSyncFeedback(null), 5000);
+                  } finally {
+                    setIsForcingPush(false);
+                  }
+                }}
+                className="p-3.5 bg-blue-600 hover:bg-blue-700 active:scale-98 disabled:opacity-60 text-white font-bold rounded-xl transition-all shadow-sm flex items-center gap-3 text-left"
+              >
+                <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <Upload className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-xs sm:text-sm font-bold leading-tight">
+                    {isForcingPush ? 'Enviando para todos…' : 'Enviar para Todos os Aparelhos'}
+                  </div>
+                  <div className="text-[11px] text-blue-100 font-normal mt-0.5">
+                    Faz os outros aparelhos ficarem iguais a este
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                disabled={isForcingPush || isForcingPull}
+                onClick={async () => {
+                  if (!onForcePullSync) return;
+                  setIsForcingPull(true);
+                  setForceSyncFeedback(null);
+                  try {
+                    await onForcePullSync();
+                    setForceSyncFeedback('Dados mais recentes da nuvem carregados neste aparelho!');
+                    setTimeout(() => setForceSyncFeedback(null), 5000);
+                  } finally {
+                    setIsForcingPull(false);
+                  }
+                }}
+                className="p-3.5 bg-white hover:bg-slate-100 active:scale-98 disabled:opacity-60 text-slate-900 border border-blue-300 font-bold rounded-xl transition-all shadow-2xs flex items-center gap-3 text-left"
+              >
+                <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
+                  <Download className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs sm:text-sm font-bold leading-tight">
+                    {isForcingPull ? 'Baixando da nuvem…' : 'Puxar Dados da Nuvem'}
+                  </div>
+                  <div className="text-[11px] text-slate-600 font-normal mt-0.5">
+                    Atualiza este aparelho com o servidor central
+                  </div>
+                </div>
+              </button>
+            </div>
           </div>
 
           {/* APRESENTAÇÃO DOS RECURSOS DE DINAMISMO */}
