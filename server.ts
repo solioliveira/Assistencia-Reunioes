@@ -124,17 +124,29 @@ self.addEventListener('install', () => {
 });
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
-      .then(() => self.registration.unregister())
-      .then(() => self.clients.matchAll({ type: 'window' }))
-      .then((clients) => {
-        clients.forEach((client) => {
+    (async () => {
+      try {
+        await self.clients.claim();
+      } catch (e) {}
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      } catch (e) {}
+      let clients = [];
+      try {
+        clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      } catch (e) {}
+      try {
+        await self.registration.unregister();
+      } catch (e) {}
+      for (const client of clients) {
+        try {
           if ('navigate' in client) {
-            client.navigate(client.url).catch(() => {});
+            await client.navigate(client.url);
           }
-        });
-      })
+        } catch (e) {}
+      }
+    })()
   );
 });
 `;
@@ -167,6 +179,7 @@ if ('serviceWorker' in navigator) {
       status: 'ok',
       timestamp: new Date().toISOString(),
       connectedClients: sseClients.size,
+      meetingsCount: currentDatabase.meetings?.length || 0,
     });
   });
 
@@ -176,6 +189,7 @@ if ('serviceWorker' in navigator) {
       success: true,
       connectedClients: sseClients.size,
       lastUpdated: currentDatabase.lastUpdated,
+      meetingsCount: currentDatabase.meetings?.length || 0,
       syncMetadata: currentDatabase.syncMetadata,
     });
   });
@@ -183,18 +197,30 @@ if ('serviceWorker' in navigator) {
   // 2b. Polling ultra-leve de 1 segundo para sincronismo simultâneo instantâneo
   app.get('/api/sync/poll', (req: Request, res: Response) => {
     const since = (req.query.since as string) || '';
-    const changed = !since || since !== currentDatabase.lastUpdated;
+    const mc = req.query.mc !== undefined ? Number(req.query.mc) : -1;
+    const pc = req.query.pc !== undefined ? Number(req.query.pc) : -1;
+    const serverMeetingsCount = currentDatabase.meetings?.length || 0;
+    const serverPublishersCount = currentDatabase.publishers?.length || 0;
+
+    const changed =
+      !since ||
+      since !== currentDatabase.lastUpdated ||
+      (mc >= 0 && mc !== serverMeetingsCount) ||
+      (pc >= 0 && pc !== serverPublishersCount);
+
     if (!changed) {
       return res.json({
         changed: false,
         lastUpdated: currentDatabase.lastUpdated,
         connectedClients: sseClients.size,
+        meetingsCount: serverMeetingsCount,
       });
     }
     return res.json({
       changed: true,
       lastUpdated: currentDatabase.lastUpdated,
       connectedClients: sseClients.size,
+      meetingsCount: serverMeetingsCount,
       database: currentDatabase,
     });
   });
@@ -204,7 +230,7 @@ if ('serviceWorker' in navigator) {
     res.json(currentDatabase);
   });
 
-  // 4. Salvar banco completo ou sincronizar simultaneamente todos os aparelhos
+  // 4. Salvar banco completo ou sincronizar simultaneamente todos os aparelhos (com união inteligente de reuniões e publicadores)
   app.post('/api/database', (req: Request, res: Response) => {
     try {
       const incoming = req.body as CongregationDatabase;
@@ -216,61 +242,107 @@ if ('serviceWorker' in navigator) {
       const sourceDeviceId = req.body?.sourceDeviceId;
       const sourceDeviceName = req.body?.sourceDeviceName;
 
-      // Protege contra sobrescrita acidental por payload vazio
-      const incomingPublishers =
-        Array.isArray(incoming.publishers) && incoming.publishers.length > 0
-          ? incoming.publishers
-          : currentDatabase.publishers;
+      // 1. União de IDs excluídos explicitamente (tombstones)
+      const deletedMeetingIds = Array.from(
+        new Set([
+          ...(currentDatabase.deletedMeetingIds || []),
+          ...(Array.isArray(incoming.deletedMeetingIds) ? incoming.deletedMeetingIds : []),
+        ])
+      );
+      const deletedPublisherIds = Array.from(
+        new Set([
+          ...(currentDatabase.deletedPublisherIds || []),
+          ...(Array.isArray(incoming.deletedPublisherIds) ? incoming.deletedPublisherIds : []),
+        ])
+      );
+      const deletedMeetSet = new Set(deletedMeetingIds);
+      const deletedPubSet = new Set(deletedPublisherIds);
 
-      const incomingMeetings = Array.isArray(incoming.meetings)
-        ? incoming.meetings
-        : currentDatabase.meetings;
-
-      // Mescla chamadas para não perder marcações de outras reuniões feitas em outros aparelhos
-      const mergedAttendance: Record<string, Record<string, AttendanceStatus>> = {
-        ...(currentDatabase.attendance || {}),
-      };
-      if (incoming.attendance && typeof incoming.attendance === 'object') {
-        for (const [mid, attMap] of Object.entries(incoming.attendance)) {
-          if (attMap && typeof attMap === 'object') {
-            mergedAttendance[mid] = {
-              ...(mergedAttendance[mid] || {}),
-              ...attMap,
-            };
+      // 2. União de reuniões (meetings) por ID para nunca perder uma 8ª reunião criada em outro aparelho
+      const meetingsMap = new Map<string, Meeting>();
+      for (const m of currentDatabase.meetings || []) {
+        if (m && m.id && !deletedMeetSet.has(m.id)) {
+          meetingsMap.set(m.id, m);
+        }
+      }
+      if (Array.isArray(incoming.meetings)) {
+        for (const m of incoming.meetings) {
+          if (m && m.id && !deletedMeetSet.has(m.id)) {
+            meetingsMap.set(m.id, { ...(meetingsMap.get(m.id) || {}), ...m });
           }
         }
       }
+      const mergedMeetings = Array.from(meetingsMap.values()).sort((a, b) =>
+        String(b.date || '').localeCompare(String(a.date || ''))
+      );
 
-      const mergedNotes: Record<string, Record<string, string>> = {
-        ...(currentDatabase.attendanceNotes || {}),
-      };
-      if (incoming.attendanceNotes && typeof incoming.attendanceNotes === 'object') {
-        for (const [mid, noteMap] of Object.entries(incoming.attendanceNotes)) {
-          if (noteMap && typeof noteMap === 'object') {
-            mergedNotes[mid] = {
-              ...(mergedNotes[mid] || {}),
-              ...noteMap,
-            };
+      // 3. União de publicadores (publishers) por ID
+      const publishersMap = new Map<string, Publisher>();
+      for (const p of currentDatabase.publishers || []) {
+        if (p && p.id && !deletedPubSet.has(p.id)) {
+          publishersMap.set(p.id, p);
+        }
+      }
+      if (Array.isArray(incoming.publishers)) {
+        for (const p of incoming.publishers) {
+          if (p && p.id && !deletedPubSet.has(p.id)) {
+            publishersMap.set(p.id, { ...(publishersMap.get(p.id) || {}), ...p });
           }
         }
       }
+      const mergedPublishers = Array.from(publishersMap.values());
 
-      // Garante que apenas reuniões existentes permaneçam no mapa de chamadas caso alguma tenha sido excluída
-      const validMeetingIds = new Set(incomingMeetings.map((m) => m.id));
-      for (const mid of Object.keys(mergedAttendance)) {
-        if (!validMeetingIds.has(mid) && incoming.attendance && !(mid in incoming.attendance)) {
-          delete mergedAttendance[mid];
-          delete mergedNotes[mid];
+      // 4. Mescla chamadas e notas para todas as reuniões válidas
+      const validMeetingIds = new Set(mergedMeetings.map((m) => m.id));
+      const mergedAttendance: Record<string, Record<string, AttendanceStatus>> = {};
+      const mergedNotes: Record<string, Record<string, string>> = {};
+
+      for (const mid of validMeetingIds) {
+        const curAtt = currentDatabase.attendance?.[mid] || {};
+        const incAtt = incoming.attendance?.[mid] || {};
+        const combinedAtt: Record<string, AttendanceStatus> = {};
+        for (const [pid, st] of Object.entries({ ...curAtt, ...incAtt })) {
+          if (!deletedPubSet.has(pid) && st) {
+            combinedAtt[pid] = st;
+          }
+        }
+        mergedAttendance[mid] = combinedAtt;
+
+        const curNotes = currentDatabase.attendanceNotes?.[mid] || {};
+        const incNotes = incoming.attendanceNotes?.[mid] || {};
+        const combinedNotes: Record<string, string> = {};
+        for (const [pid, note] of Object.entries({ ...curNotes, ...incNotes })) {
+          if (!deletedPubSet.has(pid) && note) {
+            combinedNotes[pid] = note;
+          }
+        }
+        if (Object.keys(combinedNotes).length > 0) {
+          mergedNotes[mid] = combinedNotes;
+        }
+      }
+
+      // 5. União de visitas de pastoreio
+      const visitsMap = new Map<string, ShepherdingVisit>();
+      for (const v of currentDatabase.shepherdingVisits || []) {
+        if (v && v.id) visitsMap.set(v.id, v);
+      }
+      if (Array.isArray(incoming.shepherdingVisits)) {
+        for (const v of incoming.shepherdingVisits) {
+          if (v && v.id) visitsMap.set(v.id, v);
         }
       }
 
       currentDatabase = {
         ...currentDatabase,
         ...incoming,
-        publishers: incomingPublishers,
-        meetings: incomingMeetings,
+        congregationName: incoming.congregationName || currentDatabase.congregationName,
+        publishers: mergedPublishers,
+        meetings: mergedMeetings,
         attendance: mergedAttendance,
         attendanceNotes: mergedNotes,
+        shepherdingVisits: Array.from(visitsMap.values()),
+        deletedMeetingIds,
+        deletedPublisherIds,
         lastUpdated: nowIso,
         syncMetadata: incoming.syncMetadata || {
           lastEditorDeviceId: sourceDeviceId || 'aparelho',
@@ -551,6 +623,12 @@ if ('serviceWorker' in navigator) {
         return res.status(400).json({ error: 'Dados incompletos do publicador.' });
       }
 
+      if (Array.isArray(currentDatabase.deletedPublisherIds)) {
+        currentDatabase.deletedPublisherIds = currentDatabase.deletedPublisherIds.filter(
+          (id) => id !== publisher.id
+        );
+      }
+
       const index = currentDatabase.publishers.findIndex((p) => p.id === publisher.id);
       if (index >= 0) {
         currentDatabase.publishers[index] = publisher;
@@ -576,6 +654,7 @@ if ('serviceWorker' in navigator) {
           type: 'publisher_updated',
           publisher,
           publishers: currentDatabase.publishers,
+          deletedPublisherIds: currentDatabase.deletedPublisherIds,
           metadata: currentDatabase.syncMetadata,
           lastUpdated: nowIso,
           sourceDeviceId: editorInfo?.deviceId,
@@ -589,12 +668,15 @@ if ('serviceWorker' in navigator) {
     }
   });
 
-  // 7. Excluir Publicador
-  app.delete('/api/sync/publisher/:id', (req: Request, res: Response) => {
+  // 7. Excluir Publicador (suporta DELETE e POST para compatibilidade com todos os proxies mobile)
+  const handleDeletePublisherRoute = (req: Request, res: Response) => {
     try {
       const pubId = req.params.id;
-      const editorDeviceId = req.query.deviceId as string | undefined;
+      const editorDeviceId = (req.query.deviceId || req.body?.deviceId) as string | undefined;
 
+      currentDatabase.deletedPublisherIds = Array.from(
+        new Set([...(currentDatabase.deletedPublisherIds || []), pubId])
+      );
       currentDatabase.publishers = currentDatabase.publishers.filter((p) => p.id !== pubId);
       if (currentDatabase.attendance) {
         Object.keys(currentDatabase.attendance).forEach((mid) => {
@@ -619,17 +701,25 @@ if ('serviceWorker' in navigator) {
           type: 'publisher_deleted',
           publisherId: pubId,
           publishers: currentDatabase.publishers,
+          deletedPublisherIds: currentDatabase.deletedPublisherIds,
           lastUpdated: nowIso,
           sourceDeviceId: editorDeviceId,
         },
         editorDeviceId
       );
 
-      return res.json({ success: true, lastUpdated: nowIso });
+      return res.json({
+        success: true,
+        lastUpdated: nowIso,
+        deletedPublisherIds: currentDatabase.deletedPublisherIds,
+      });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
-  });
+  };
+
+  app.delete('/api/sync/publisher/:id', handleDeletePublisherRoute);
+  app.post('/api/sync/publisher/delete/:id', handleDeletePublisherRoute);
 
   // 8. Sincronização de Reunião (Criar / Editar) com presença inicial atômica
   app.post('/api/sync/meeting', (req: Request, res: Response) => {
@@ -645,20 +735,33 @@ if ('serviceWorker' in navigator) {
         return res.status(400).json({ error: 'Dados incompletos da reunião.' });
       }
 
+      if (Array.isArray(currentDatabase.deletedMeetingIds)) {
+        currentDatabase.deletedMeetingIds = currentDatabase.deletedMeetingIds.filter(
+          (id) => id !== meeting.id
+        );
+      }
+
       const index = currentDatabase.meetings.findIndex((m) => m.id === meeting.id);
       if (index >= 0) {
         currentDatabase.meetings[index] = meeting;
       } else {
         currentDatabase.meetings.unshift(meeting);
       }
+      currentDatabase.meetings.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
 
       if (initialAttendance) {
         if (!currentDatabase.attendance) currentDatabase.attendance = {};
-        currentDatabase.attendance[meeting.id] = { ...initialAttendance };
+        currentDatabase.attendance[meeting.id] = {
+          ...(currentDatabase.attendance[meeting.id] || {}),
+          ...initialAttendance,
+        };
       }
       if (initialNotes) {
         if (!currentDatabase.attendanceNotes) currentDatabase.attendanceNotes = {};
-        currentDatabase.attendanceNotes[meeting.id] = { ...initialNotes };
+        currentDatabase.attendanceNotes[meeting.id] = {
+          ...(currentDatabase.attendanceNotes[meeting.id] || {}),
+          ...initialNotes,
+        };
       }
 
       const nowIso = new Date().toISOString();
@@ -677,6 +780,7 @@ if ('serviceWorker' in navigator) {
           type: 'meeting_updated',
           meeting,
           meetings: currentDatabase.meetings,
+          deletedMeetingIds: currentDatabase.deletedMeetingIds,
           attendance: currentDatabase.attendance,
           attendanceNotes: currentDatabase.attendanceNotes,
           metadata: currentDatabase.syncMetadata,
@@ -686,18 +790,26 @@ if ('serviceWorker' in navigator) {
         editorInfo?.deviceId
       );
 
-      return res.json({ success: true, meeting, lastUpdated: nowIso });
+      return res.json({
+        success: true,
+        meeting,
+        meetings: currentDatabase.meetings,
+        lastUpdated: nowIso,
+      });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
   });
 
-  // 9. Excluir Reunião
-  app.delete('/api/sync/meeting/:id', (req: Request, res: Response) => {
+  // 9. Excluir Reunião (suporta DELETE e POST para compatibilidade com todos os proxies mobile)
+  const handleDeleteMeetingRoute = (req: Request, res: Response) => {
     try {
       const meetingId = req.params.id;
-      const editorDeviceId = req.query.deviceId as string | undefined;
+      const editorDeviceId = (req.query.deviceId || req.body?.deviceId) as string | undefined;
 
+      currentDatabase.deletedMeetingIds = Array.from(
+        new Set([...(currentDatabase.deletedMeetingIds || []), meetingId])
+      );
       currentDatabase.meetings = currentDatabase.meetings.filter((m) => m.id !== meetingId);
       if (currentDatabase.attendance) {
         delete currentDatabase.attendance[meetingId];
@@ -714,6 +826,7 @@ if ('serviceWorker' in navigator) {
           type: 'meeting_deleted',
           meetingId,
           meetings: currentDatabase.meetings,
+          deletedMeetingIds: currentDatabase.deletedMeetingIds,
           attendance: currentDatabase.attendance,
           attendanceNotes: currentDatabase.attendanceNotes,
           lastUpdated: nowIso,
@@ -722,11 +835,19 @@ if ('serviceWorker' in navigator) {
         editorDeviceId
       );
 
-      return res.json({ success: true, lastUpdated: nowIso });
+      return res.json({
+        success: true,
+        lastUpdated: nowIso,
+        meetings: currentDatabase.meetings,
+        deletedMeetingIds: currentDatabase.deletedMeetingIds,
+      });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
-  });
+  };
+
+  app.delete('/api/sync/meeting/:id', handleDeleteMeetingRoute);
+  app.post('/api/sync/meeting/delete/:id', handleDeleteMeetingRoute);
 
   // 10. Visitas de Pastoreio
   app.post('/api/sync/shepherding', (req: Request, res: Response) => {

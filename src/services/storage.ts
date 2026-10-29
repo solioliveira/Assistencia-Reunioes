@@ -106,16 +106,191 @@ export function sanitizeDatabase(data: any): CongregationDatabase {
     ? data.shepherdingVisits
     : INITIAL_DATABASE.shepherdingVisits;
 
+  const deletedMeetingIds: string[] = Array.isArray(data.deletedMeetingIds)
+    ? Array.from(new Set(data.deletedMeetingIds.map(String)))
+    : [];
+
+  const deletedPublisherIds: string[] = Array.isArray(data.deletedPublisherIds)
+    ? Array.from(new Set(data.deletedPublisherIds.map(String)))
+    : [];
+
+  const deletedMeetSet = new Set(deletedMeetingIds);
+  const deletedPubSet = new Set(deletedPublisherIds);
+
   return {
     version: Number(data.version) || 2,
     congregationName: String(data.congregationName || INITIAL_DATABASE.congregationName),
-    publishers,
-    meetings,
+    publishers: publishers.filter((p) => !deletedPubSet.has(p.id)),
+    meetings: meetings.filter((m) => !deletedMeetSet.has(m.id)),
     attendance,
     attendanceNotes,
     shepherdingVisits,
+    deletedMeetingIds,
+    deletedPublisherIds,
     lastUpdated: data.lastUpdated ? String(data.lastUpdated) : new Date().toISOString(),
     syncMetadata: data.syncMetadata && typeof data.syncMetadata === 'object' ? data.syncMetadata : undefined,
+  };
+}
+
+/**
+ * Mescla de forma determinística dois bancos (ex: Servidor e Aparelho Local),
+ * unindo todas as reuniões (chamadas), publicadores, presenças e observações,
+ * e respeitando exclusões explícitas (deletedMeetingIds / deletedPublisherIds).
+ */
+export function mergeDatabases(
+  baseDb: CongregationDatabase | null | undefined,
+  incomingDb: CongregationDatabase,
+  options?: {
+    preferIncoming?: boolean;
+    mode?: 'union' | 'pull_server';
+    activeMeetingId?: string;
+  }
+): CongregationDatabase {
+  if (!baseDb) {
+    return sanitizeDatabase(incomingDb);
+  }
+
+  const baseTime = baseDb.lastUpdated ? new Date(baseDb.lastUpdated).getTime() : 0;
+  const incTime = incomingDb.lastUpdated ? new Date(incomingDb.lastUpdated).getTime() : 0;
+  const preferIncoming =
+    options?.preferIncoming !== undefined ? options.preferIncoming : incTime >= baseTime;
+  const mode = options?.mode || 'union';
+
+  const deletedMeetingIds = Array.from(
+    new Set([
+      ...(baseDb.deletedMeetingIds || []),
+      ...(incomingDb.deletedMeetingIds || []),
+    ])
+  );
+  const deletedPublisherIds = Array.from(
+    new Set([
+      ...(baseDb.deletedPublisherIds || []),
+      ...(incomingDb.deletedPublisherIds || []),
+    ])
+  );
+
+  const deletedMeetSet = new Set(deletedMeetingIds);
+  const deletedPubSet = new Set(deletedPublisherIds);
+
+  const olderDb = preferIncoming ? baseDb : incomingDb;
+  const newerDb = preferIncoming ? incomingDb : baseDb;
+
+  // 1. União de reuniões (meetings) por ID (preservando reuniões criadas em qualquer aparelho)
+  const meetingsMap = new Map<string, Meeting>();
+  for (const m of olderDb.meetings || []) {
+    if (m && m.id && !deletedMeetSet.has(m.id)) {
+      meetingsMap.set(m.id, m);
+    }
+  }
+  for (const m of newerDb.meetings || []) {
+    if (m && m.id && !deletedMeetSet.has(m.id)) {
+      meetingsMap.set(m.id, { ...(meetingsMap.get(m.id) || {}), ...m });
+    }
+  }
+  const mergedMeetings = Array.from(meetingsMap.values()).sort((a, b) =>
+    String(b.date || '').localeCompare(String(a.date || ''))
+  );
+
+  // 2. União de publicadores (publishers) por ID
+  const publishersMap = new Map<string, Publisher>();
+  for (const p of olderDb.publishers || []) {
+    if (p && p.id && !deletedPubSet.has(p.id)) {
+      publishersMap.set(p.id, p);
+    }
+  }
+  for (const p of newerDb.publishers || []) {
+    if (p && p.id && !deletedPubSet.has(p.id)) {
+      publishersMap.set(p.id, { ...(publishersMap.get(p.id) || {}), ...p });
+    }
+  }
+  const mergedPublishers = Array.from(publishersMap.values());
+
+  // 3. Mesclagem de chamadas (attendance) e observações (attendanceNotes)
+  const mergedAttendance: Record<string, Record<string, AttendanceStatus>> = {};
+  const mergedNotes: Record<string, Record<string, string>> = {};
+
+  for (const m of mergedMeetings) {
+    const mid = m.id;
+    const baseHasMid = Boolean(baseDb.meetings?.some((x) => x.id === mid));
+    const incHasMid = Boolean(incomingDb.meetings?.some((x) => x.id === mid));
+
+    if (mode === 'pull_server') {
+      // No modo pull_server (baseDb = servidor, incomingDb = local):
+      // Se a reunião já existe no servidor, o mapa daquela reunião no servidor é autoritativo (reflete inclusive desmarcações).
+      // Se a reunião existe apenas localmente neste aparelho (ex: 8ª chamada recém-criada), preserva integralmente a chamada local!
+      const sourceAtt = baseHasMid
+        ? baseDb.attendance?.[mid] || incomingDb.attendance?.[mid] || {}
+        : incomingDb.attendance?.[mid] || {};
+      const sourceNotes = baseHasMid
+        ? baseDb.attendanceNotes?.[mid] || incomingDb.attendanceNotes?.[mid] || {}
+        : incomingDb.attendanceNotes?.[mid] || {};
+
+      const cleanAtt: Record<string, AttendanceStatus> = {};
+      for (const [pid, st] of Object.entries(sourceAtt)) {
+        if (!deletedPubSet.has(pid) && st) cleanAtt[pid] = st;
+      }
+      mergedAttendance[mid] = cleanAtt;
+
+      const cleanNotes: Record<string, string> = {};
+      for (const [pid, note] of Object.entries(sourceNotes)) {
+        if (!deletedPubSet.has(pid) && note) cleanNotes[pid] = note;
+      }
+      if (Object.keys(cleanNotes).length > 0) {
+        mergedNotes[mid] = cleanNotes;
+      }
+    } else {
+      // No modo union (sincronização manual ou inicial): combina marcações de ambos os lados
+      const isSelectedActive = options?.activeMeetingId && options.activeMeetingId === mid;
+      const firstAtt =
+        (isSelectedActive ? baseDb.attendance?.[mid] : olderDb.attendance?.[mid]) || {};
+      const secondAtt =
+        (isSelectedActive ? incomingDb.attendance?.[mid] : newerDb.attendance?.[mid]) || {};
+
+      const combinedAtt: Record<string, AttendanceStatus> = {};
+      for (const [pid, st] of Object.entries({ ...firstAtt, ...secondAtt })) {
+        if (!deletedPubSet.has(pid) && st) combinedAtt[pid] = st;
+      }
+      if (Object.keys(combinedAtt).length > 0 || baseHasMid || incHasMid) {
+        mergedAttendance[mid] = combinedAtt;
+      }
+
+      const firstNotes =
+        (isSelectedActive ? baseDb.attendanceNotes?.[mid] : olderDb.attendanceNotes?.[mid]) || {};
+      const secondNotes =
+        (isSelectedActive ? incomingDb.attendanceNotes?.[mid] : newerDb.attendanceNotes?.[mid]) ||
+        {};
+      const combinedNotes: Record<string, string> = {};
+      for (const [pid, note] of Object.entries({ ...firstNotes, ...secondNotes })) {
+        if (!deletedPubSet.has(pid) && note) combinedNotes[pid] = note;
+      }
+      if (Object.keys(combinedNotes).length > 0) {
+        mergedNotes[mid] = combinedNotes;
+      }
+    }
+  }
+
+  // 4. Visitas de pastoreio
+  const visitsMap = new Map<string, ShepherdingVisit>();
+  for (const v of olderDb.shepherdingVisits || []) {
+    if (v && v.id) visitsMap.set(v.id, v);
+  }
+  for (const v of newerDb.shepherdingVisits || []) {
+    if (v && v.id) visitsMap.set(v.id, v);
+  }
+
+  return {
+    version: Math.max(Number(baseDb.version) || 2, Number(incomingDb.version) || 2),
+    congregationName:
+      newerDb.congregationName || olderDb.congregationName || INITIAL_DATABASE.congregationName,
+    publishers: mergedPublishers,
+    meetings: mergedMeetings,
+    attendance: mergedAttendance,
+    attendanceNotes: mergedNotes,
+    shepherdingVisits: Array.from(visitsMap.values()),
+    deletedMeetingIds,
+    deletedPublisherIds,
+    lastUpdated: newerDb.lastUpdated || olderDb.lastUpdated || new Date().toISOString(),
+    syncMetadata: newerDb.syncMetadata || olderDb.syncMetadata,
   };
 }
 
@@ -127,6 +302,46 @@ export function loadDatabase(): CongregationDatabase {
       if (parsed && typeof parsed === 'object') {
         // Preserva 100% das alterações, publicadores, presenças e notas que o usuário já fez
         const sanitized = sanitizeDatabase(parsed);
+
+        // Verifica também se há alguma reunião pendente na fila offline para nunca perder nenhuma chamada
+        try {
+          const queueRaw = localStorage.getItem('jw_congregation_pending_queue_v1');
+          if (queueRaw) {
+            const queue = JSON.parse(queueRaw);
+            if (Array.isArray(queue)) {
+              const delSet = new Set(sanitized.deletedMeetingIds || []);
+              for (const item of queue) {
+                if (
+                  item?.type === 'meeting' &&
+                  item.meeting?.id &&
+                  !delSet.has(item.meeting.id) &&
+                  !sanitized.meetings.some((m) => m.id === item.meeting.id)
+                ) {
+                  sanitized.meetings = [item.meeting, ...sanitized.meetings];
+                }
+                if (
+                  item?.type === 'attendance' &&
+                  item.meetingId &&
+                  !delSet.has(item.meetingId) &&
+                  item.attendanceMap
+                ) {
+                  sanitized.attendance[item.meetingId] = {
+                    ...(sanitized.attendance[item.meetingId] || {}),
+                    ...item.attendanceMap,
+                  };
+                  if (item.notesMap) {
+                    sanitized.attendanceNotes = sanitized.attendanceNotes || {};
+                    sanitized.attendanceNotes[item.meetingId] = {
+                      ...(sanitized.attendanceNotes[item.meetingId] || {}),
+                      ...item.notesMap,
+                    };
+                  }
+                }
+              }
+            }
+          }
+        } catch {}
+
         return sanitized;
       }
     }

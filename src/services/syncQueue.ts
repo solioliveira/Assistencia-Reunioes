@@ -1,10 +1,14 @@
 import {
+  deleteMeetingFromFirestore,
+  deletePublisherFromFirestore,
   syncAttendanceToFirestore,
   syncMeetingToFirestore,
   syncPublisherToFirestore,
   syncShepherdingVisitToFirestore,
 } from './firebase';
 import {
+  deleteMeetingOnServer,
+  deletePublisherOnServer,
   sendAttendanceToServer,
   sendMeetingToServer,
   sendPublisherToServer,
@@ -87,7 +91,9 @@ export function enqueueAttendanceSync(
 
 // Enfileira sincronização de reunião
 export function enqueueMeetingSync(meeting: Meeting): void {
-  const queue = getPendingQueue();
+  const queue = getPendingQueue().filter(
+    (item) => !(item.type === 'delete_meeting' && item.meetingId === meeting.id)
+  );
   const existingIdx = queue.findIndex(
     (item) => item.type === 'meeting' && item.meeting?.id === meeting.id
   );
@@ -108,9 +114,28 @@ export function enqueueMeetingSync(meeting: Meeting): void {
   saveQueue(queue);
 }
 
+// Enfileira exclusão de reunião
+export function enqueueDeleteMeetingSync(meetingId: string): void {
+  const queue = getPendingQueue().filter(
+    (item) =>
+      !(item.type === 'meeting' && item.meeting?.id === meetingId) &&
+      !(item.type === 'attendance' && item.meetingId === meetingId) &&
+      !(item.type === 'delete_meeting' && item.meetingId === meetingId)
+  );
+  queue.push({
+    id: `sync-del-meet-${meetingId}-${Date.now()}`,
+    type: 'delete_meeting',
+    timestamp: Date.now(),
+    meetingId,
+  });
+  saveQueue(queue);
+}
+
 // Enfileira sincronização de publicador
 export function enqueuePublisherSync(publisher: Publisher): void {
-  const queue = getPendingQueue();
+  const queue = getPendingQueue().filter(
+    (item) => !(item.type === 'delete_publisher' && item.publisherId === publisher.id)
+  );
   const existingIdx = queue.findIndex(
     (item) => item.type === 'publisher' && item.publisher?.id === publisher.id
   );
@@ -128,6 +153,22 @@ export function enqueuePublisherSync(publisher: Publisher): void {
     queue.push(item);
   }
 
+  saveQueue(queue);
+}
+
+// Enfileira exclusão de publicador
+export function enqueueDeletePublisherSync(publisherId: string): void {
+  const queue = getPendingQueue().filter(
+    (item) =>
+      !(item.type === 'publisher' && item.publisher?.id === publisherId) &&
+      !(item.type === 'delete_publisher' && item.publisherId === publisherId)
+  );
+  queue.push({
+    id: `sync-del-pub-${publisherId}-${Date.now()}`,
+    type: 'delete_publisher',
+    timestamp: Date.now(),
+    publisherId,
+  });
   saveQueue(queue);
 }
 
@@ -159,7 +200,7 @@ export function clearPendingQueue(): void {
   saveQueue([]);
 }
 
-// Processa e descarrega a fila de pendências para o Firestore
+// Processa e descarrega a fila de pendências para o servidor e Firestore
 let isProcessingQueue = false;
 
 export async function processPendingSyncQueue(
@@ -190,7 +231,6 @@ export async function processPendingSyncQueue(
       try {
         if (item.type === 'attendance' && item.meetingId && item.attendanceMap) {
           const device = getDeviceInfo();
-          // Tenta enviar para o servidor Express (sincronização multi-aparelho nativa)
           const serverSuccess = await sendAttendanceToServer(
             item.meetingId,
             item.attendanceMap,
@@ -202,8 +242,7 @@ export async function processPendingSyncQueue(
             }
           );
 
-          // Se Firebase estiver ativo, também salva lá
-          let firestoreSuccess = true;
+          let firestoreSuccess = false;
           if (isFirebaseActive) {
             firestoreSuccess = await syncAttendanceToFirestore(
               item.meetingId,
@@ -220,21 +259,35 @@ export async function processPendingSyncQueue(
           succeeded = serverSuccess || firestoreSuccess;
         } else if (item.type === 'meeting' && item.meeting) {
           const serverSuccess = await sendMeetingToServer(item.meeting);
-          let firestoreSuccess = true;
+          let firestoreSuccess = false;
           if (isFirebaseActive) {
             firestoreSuccess = await syncMeetingToFirestore(item.meeting);
           }
           succeeded = serverSuccess || firestoreSuccess;
+        } else if (item.type === 'delete_meeting' && item.meetingId) {
+          const serverSuccess = await deleteMeetingOnServer(item.meetingId);
+          let firestoreSuccess = false;
+          if (isFirebaseActive) {
+            firestoreSuccess = await deleteMeetingFromFirestore(item.meetingId);
+          }
+          succeeded = serverSuccess || firestoreSuccess;
         } else if (item.type === 'publisher' && item.publisher) {
           const serverSuccess = await sendPublisherToServer(item.publisher);
-          let firestoreSuccess = true;
+          let firestoreSuccess = false;
           if (isFirebaseActive) {
             firestoreSuccess = await syncPublisherToFirestore(item.publisher);
           }
           succeeded = serverSuccess || firestoreSuccess;
+        } else if (item.type === 'delete_publisher' && item.publisherId) {
+          const serverSuccess = await deletePublisherOnServer(item.publisherId);
+          let firestoreSuccess = false;
+          if (isFirebaseActive) {
+            firestoreSuccess = await deletePublisherFromFirestore(item.publisherId);
+          }
+          succeeded = serverSuccess || firestoreSuccess;
         } else if (item.type === 'visit' && item.visit) {
           const serverSuccess = await sendShepherdingToServer(item.visit);
-          let firestoreSuccess = true;
+          let firestoreSuccess = false;
           if (isFirebaseActive) {
             firestoreSuccess = await syncShepherdingVisitToFirestore(item.visit);
           }

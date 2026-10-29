@@ -25,6 +25,7 @@ export interface ServerSyncEventCallbacks {
   }) => void;
   onPublisherUpdated?: (data: {
     publishers: Publisher[];
+    deletedPublisherIds?: string[];
     lastUpdated?: string;
     sourceDeviceId?: string;
   }) => void;
@@ -32,6 +33,7 @@ export interface ServerSyncEventCallbacks {
     meeting?: Meeting;
     meetingId?: string;
     meetings: Meeting[];
+    deletedMeetingIds?: string[];
     attendance?: Record<string, Record<string, AttendanceStatus>>;
     attendanceNotes?: Record<string, Record<string, string>>;
     metadata?: SyncMetadata;
@@ -229,14 +231,28 @@ export async function fetchServerDatabase(): Promise<CongregationDatabase | null
 /**
  * Polling rápido de 1 segundo para sincronismo simultâneo instantâneo entre todos os aparelhos
  */
-export async function pollServerChanges(since: string): Promise<{
+export async function pollServerChanges(
+  since: string,
+  meetingsCount?: number,
+  publishersCount?: number
+): Promise<{
   changed: boolean;
   lastUpdated: string;
   connectedClients?: number;
+  meetingsCount?: number;
   database?: CongregationDatabase;
 } | null> {
+  const params = new URLSearchParams({
+    since: since || '',
+  });
+  if (typeof meetingsCount === 'number' && meetingsCount >= 0) {
+    params.set('mc', String(meetingsCount));
+  }
+  if (typeof publishersCount === 'number' && publishersCount >= 0) {
+    params.set('pc', String(publishersCount));
+  }
   return await apiFetchJson(
-    `/api/sync/poll?since=${encodeURIComponent(since || '')}`,
+    `/api/sync/poll?${params.toString()}`,
     { method: 'GET' },
     false,
     1
@@ -278,11 +294,17 @@ export async function sendAttendanceToServer(
 }
 
 /**
- * Salva ou atualiza o banco completo no servidor
+ * Salva ou atualiza o banco completo no servidor e retorna o banco unificado autoritativo
  */
-export async function sendDatabaseToServer(database: CongregationDatabase): Promise<boolean> {
+export async function sendDatabaseToServer(
+  database: CongregationDatabase
+): Promise<CongregationDatabase | null> {
   const device = getDeviceInfo();
-  const data = await apiFetchJson(
+  const data = await apiFetchJson<{
+    success: boolean;
+    lastUpdated?: string;
+    database?: CongregationDatabase;
+  }>(
     '/api/database',
     {
       method: 'POST',
@@ -296,7 +318,10 @@ export async function sendDatabaseToServer(database: CongregationDatabase): Prom
     true,
     3
   );
-  return Boolean(data && data.success);
+  if (data && data.success) {
+    return data.database || database;
+  }
+  return null;
 }
 
 /**
@@ -329,9 +354,11 @@ export async function sendPublisherToServer(publisher: Publisher): Promise<boole
 export async function deletePublisherOnServer(publisherId: string): Promise<boolean> {
   const device = getDeviceInfo();
   const data = await apiFetchJson(
-    `/api/sync/publisher/${publisherId}?deviceId=${encodeURIComponent(device.deviceId)}`,
+    `/api/sync/publisher/delete/${encodeURIComponent(publisherId)}`,
     {
-      method: 'DELETE',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: device.deviceId }),
     },
     true,
     3
@@ -375,9 +402,11 @@ export async function sendMeetingToServer(
 export async function deleteMeetingOnServer(meetingId: string): Promise<boolean> {
   const device = getDeviceInfo();
   const data = await apiFetchJson(
-    `/api/sync/meeting/${meetingId}?deviceId=${encodeURIComponent(device.deviceId)}`,
+    `/api/sync/meeting/delete/${encodeURIComponent(meetingId)}`,
     {
-      method: 'DELETE',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: device.deviceId }),
     },
     true,
     3

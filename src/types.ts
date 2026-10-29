@@ -117,6 +117,8 @@ export interface CongregationDatabase {
   attendance: Record<string, MeetingAttendanceMap>; // meetingId -> { publisherId: status }
   attendanceNotes?: Record<string, MeetingNotesMap>; // meetingId -> { publisherId: observacao }
   shepherdingVisits: ShepherdingVisit[];
+  deletedMeetingIds?: string[];
+  deletedPublisherIds?: string[];
   exportDate?: string;
   lastUpdated?: string;
   syncMetadata?: SyncMetadata;
@@ -175,9 +177,10 @@ export interface AbsenceStreakInfo {
 
 export interface PendingSyncItem {
   id: string;
-  type: 'attendance' | 'meeting' | 'publisher' | 'visit';
+  type: 'attendance' | 'meeting' | 'publisher' | 'visit' | 'delete_meeting' | 'delete_publisher';
   timestamp: number;
   meetingId?: string;
+  publisherId?: string;
   attendanceMap?: Record<string, AttendanceStatus>;
   notesMap?: Record<string, string>;
   meeting?: Meeting;
