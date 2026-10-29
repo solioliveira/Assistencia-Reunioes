@@ -206,6 +206,8 @@ interface ImportRowPreview {
 type SheetType =
   | null
   | { type: 'newMeeting' }
+  | { type: 'delMeeting'; mid: string }
+  | { type: 'manageMeetings' }
   | { type: 'reason'; pid: string }
   | { type: 'finish' }
   | { type: 'reopen' }
@@ -2193,6 +2195,16 @@ export function App() {
               >
                 ＋ Nova
               </button>
+              {currentMeeting && (
+                <button
+                  className="ibtn text-danger whitespace-nowrap px-3"
+                  title="Excluir chamada selecionada"
+                  aria-label="Excluir chamada selecionada"
+                  onClick={() => setActiveSheet({ type: 'delMeeting', mid: currentMeeting.id })}
+                >
+                  🗑
+                </button>
+              )}
             </div>
 
             <div className="row mt">
@@ -2239,6 +2251,22 @@ export function App() {
               <button className="chip" onClick={handleCopySummary}>
                 Copiar resumo
               </button>
+              {currentMeeting && (
+                <button
+                  className="chip text-danger"
+                  onClick={() => setActiveSheet({ type: 'delMeeting', mid: currentMeeting.id })}
+                >
+                  🗑 Excluir chamada
+                </button>
+              )}
+              {sortedMeetings.length > 0 && (
+                <button
+                  className="chip"
+                  onClick={() => setActiveSheet({ type: 'manageMeetings' })}
+                >
+                  📅 Gerenciar chamadas ({sortedMeetings.length})
+                </button>
+              )}
               <button
                 className="chip"
                 onClick={() => setActiveSheet({ type: 'exportSheet' })}
@@ -3016,6 +3044,12 @@ export function App() {
                   Marcar os {counts.n} restantes como ausentes
                 </button>
               )}
+              <button
+                className="ibtn mt w-full text-danger"
+                onClick={() => setActiveSheet({ type: 'delMeeting', mid: currentMeeting.id })}
+              >
+                🗑 Excluir esta chamada
+              </button>
             </>
           )}
 
@@ -3041,6 +3075,14 @@ export function App() {
                   Reabrir
                 </button>
               </div>
+              {currentMeeting && (
+                <button
+                  className="ibtn mt w-full text-danger"
+                  onClick={() => setActiveSheet({ type: 'delMeeting', mid: currentMeeting.id })}
+                >
+                  🗑 Excluir esta chamada
+                </button>
+              )}
             </>
           )}
 
@@ -3384,6 +3426,148 @@ export function App() {
               >
                 Fechar
               </button>
+            </>
+          )}
+
+          {/* 12. EXCLUIR CHAMADA (CONFIRMAÇÃO) */}
+          {activeSheet?.type === 'delMeeting' &&
+            (() => {
+              const targetMeeting = database.meetings.find((m) => m.id === activeSheet.mid);
+              if (!targetMeeting) return null;
+              const attMap = database.attendance[targetMeeting.id] || {};
+              let pCount = 0;
+              let zCount = 0;
+              let auCount = 0;
+              activePublishers.forEach((pub) => {
+                const s = attMap[pub.id];
+                if (s === 'presencial') pCount++;
+                else if (s === 'zoom') zCount++;
+                else if (s === 'ausente') auCount++;
+              });
+              const visCount = getVisitorsForMeeting(targetMeeting.id);
+              const assistTotal = pCount + zCount + visCount;
+              const dowLabel = targetMeeting.dayOfWeek || getPortugueseDayOfWeek(targetMeeting.date);
+              return (
+                <>
+                  <h3>Excluir chamada?</h3>
+                  <p>
+                    Tem certeza que deseja excluir a chamada de{' '}
+                    <b>
+                      {fmtDate(targetMeeting.date)} ({dowLabel}) · {TYPE_LABEL[targetMeeting.type]}
+                    </b>
+                    ?
+                  </p>
+                  <p className="small mb-3">
+                    Assistência registrada nesta chamada: <b>{assistTotal}</b> ({pCount} presencial,{' '}
+                    {zCount} Zoom, {visCount} visitantes, {auCount} ausentes). Esta ação remove os
+                    registros desta reunião de todos os aparelhos sincronizados.
+                  </p>
+                  <div className="row">
+                    <button
+                      className="ibtn flex-1"
+                      onClick={() => setActiveSheet(null)}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      className="ibtn primary btn-danger flex-1"
+                      onClick={() => {
+                        handleDeleteMeeting(targetMeeting.id);
+                        setActiveSheet(null);
+                        showSnack('Chamada excluída', false);
+                      }}
+                    >
+                      Excluir chamada
+                    </button>
+                  </div>
+                  {sortedMeetings.length > 1 && (
+                    <button
+                      className="ibtn mt w-full"
+                      onClick={() => setActiveSheet({ type: 'manageMeetings' })}
+                    >
+                      📅 Ver todas as chamadas ({sortedMeetings.length})
+                    </button>
+                  )}
+                </>
+              );
+            })()}
+
+          {/* 13. GERENCIAR / EXCLUIR CHAMADAS FEITAS */}
+          {activeSheet?.type === 'manageMeetings' && (
+            <>
+              <h3>Chamadas registradas ({sortedMeetings.length})</h3>
+              <p>Toque em uma reunião para abri-la ou clique na lixeira para excluir.</p>
+              <div className="pub-list-scroll">
+                {sortedMeetings.length > 0 ? (
+                  sortedMeetings.map((m) => {
+                    const attMap = database.attendance[m.id] || {};
+                    let pCount = 0;
+                    let zCount = 0;
+                    activePublishers.forEach((pub) => {
+                      const s = attMap[pub.id];
+                      if (s === 'presencial') pCount++;
+                      else if (s === 'zoom') zCount++;
+                    });
+                    const visCount = getVisitorsForMeeting(m.id);
+                    const assistTotal = pCount + zCount + visCount;
+                    const dowLabel = m.dayOfWeek || getPortugueseDayOfWeek(m.date);
+                    const isSelected = m.id === selectedMeetingId;
+                    return (
+                      <div className="pub-item" key={m.id}>
+                        <div
+                          className="info cursor-pointer"
+                          onClick={() => {
+                            setSelectedMeetingId(m.id);
+                            setActiveSheet(null);
+                          }}
+                        >
+                          <div className="n">
+                            {fmtDate(m.date)} ({dowLabel})
+                            {isSelected ? ' · Atual' : ''}
+                            {isMeetingFinalized(m.id) ? ' ✓' : ''}
+                          </div>
+                          <div className="s">
+                            {TYPE_LABEL[m.type]} · Assistência: {assistTotal} ({pCount}P / {zCount}Z /{' '}
+                            {visCount}V)
+                          </div>
+                        </div>
+                        <button
+                          className="ibtn"
+                          onClick={() => {
+                            setSelectedMeetingId(m.id);
+                            setActiveSheet(null);
+                          }}
+                        >
+                          Abrir
+                        </button>
+                        <button
+                          className="ibtn text-danger"
+                          title="Excluir esta chamada"
+                          onClick={() => setActiveSheet({ type: 'delMeeting', mid: m.id })}
+                        >
+                          🗑 Excluir
+                        </button>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="empty">Nenhuma chamada registrada.</div>
+                )}
+              </div>
+              <div className="row mt">
+                <button
+                  className="ibtn flex-1"
+                  onClick={() => setActiveSheet(null)}
+                >
+                  Fechar
+                </button>
+                <button
+                  className="ibtn primary flex-1"
+                  onClick={openNewMeetingSheet}
+                >
+                  ＋ Nova chamada
+                </button>
+              </div>
             </>
           )}
         </div>
